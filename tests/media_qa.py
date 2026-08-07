@@ -68,21 +68,19 @@ def detect_black_frames(ffmpeg: str, video_path: Path,
                         threshold: float = BLACK_LUMA_THRESHOLD) -> list[float]:
     """
     Return a list of timestamps (seconds) whose frame luma (YAVG) is <= threshold.
-    Uses ffmpeg `signalstats` + `metadata=print` -> parse `lavfi.signalstats.YAVG`.
-    An empty list = no black frames.
+    Uses ffmpeg `signalstats` + `metadata=print` which writes `lavfi.signalstats.YAVG`
+    on stdout. An empty list = no black frames.
     """
-    rc, _, err = run_ffmpeg(ffmpeg, [
+    rc, out, _ = run_ffmpeg(ffmpeg, [
         "-i", str(video_path),
         "-vf", "signalstats,metadata=print:file=-",
         "-f", "null", "-",
     ])
     if rc != 0:
-        # Some builds don't write metadata to stdout; surface and treat as no-frame.
         return []
-
     black_frames: list[float] = []
     current_ts = 0.0
-    for line in err.splitlines():
+    for line in out.splitlines():
         line = line.strip()
         ts_m = re.search(r"pts_time:([0-9.]+)", line)
         if ts_m:

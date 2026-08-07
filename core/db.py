@@ -339,6 +339,20 @@ class Database:
             ).fetchall()
         return self._conn().execute("SELECT * FROM clips ORDER BY created_at DESC").fetchall()
 
+    def update_clip(self, clip_id: str, **fields: Any) -> None:
+        """Atomically update render/result columns on an existing clip."""
+        if not fields:
+            return
+        allowed = {"video_path", "caption_path", "title", "description",
+                   "hashtags", "approved", "virality_score", "metadata"}
+        sets = ", ".join(f"{k}=?" for k in fields if k in allowed)
+        args = [fields[k] for k in fields if k in allowed]
+        if not sets:
+            return
+        args.append(clip_id)
+        with self.transaction() as conn:
+            conn.execute(f"UPDATE clips SET {sets} WHERE id=?", args)
+
     # ------------------------------------------------------------------
     # Daily clip budget (for the N-account scheduler)
     # ------------------------------------------------------------------
