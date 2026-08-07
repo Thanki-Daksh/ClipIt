@@ -1,0 +1,39 @@
+# ---- Secrets & credentials (NEVER commit these) ----
+.env
+.env.*
+config.json
+!config.example.json
+
+# ---- Production data / databases (NEVER commit) ----
+storage/clipit.db
+storage/clipit.db-wal
+storage/clipit.db-shm
+*.db
+*.sqlite
+*.sqlite3
+storage/downloads/*
+storage/accounts/*
+storage/logs/*
+!storage/.gitkeep
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+build/
+dist/
+
+# ---- Media / scratch ----
+scratch/chunks_temp/
+*.wav
+*.mp4
+*.mkv
+*.webm
+
+# ---- Tooling ----
+.vscode/
+.idea/
+.DS_Store

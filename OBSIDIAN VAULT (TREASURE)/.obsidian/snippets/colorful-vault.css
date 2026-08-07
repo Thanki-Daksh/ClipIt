@@ -1,0 +1,119 @@
+/* 🎨 TREASURE VAULT - Vibrant Custom Styling */
+
+:root {
+  --vault-purple: #a855f7;
+  --vault-cyan: #06b6d4;
+  --vault-emerald: #10b981;
+  --vault-amber: #f59e0b;
+  --vault-rose: #f43f5e;
+  --vault-blue: #3b82f6;
+  --vault-bg-dark: #0f172a;
+}
+
+/* Graph View Background & Nodes */
+.graph-view-container {
+  background-color: #0b0f19 !important;
+}
+
+/* Vibrant Heading Colors & Gradients */
+.cm-header-1, .markdown-rendered h1 {
+  background: linear-gradient(135deg, #a855f7 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
+  border-bottom: 2px solid rgba(168, 85, 247, 0.3);
+  padding-bottom: 6px;
+  margin-top: 1.2em;
+}
+
+.cm-header-2, .markdown-rendered h2 {
+  color: #38bdf8 !important;
+  border-left: 4px solid #38bdf8;
+  padding-left: 10px;
+  font-weight: 700;
+}
+
+.cm-header-3, .markdown-rendered h3 {
+  color: #34d399 !important;
+  font-weight: 600;
+}
+
+.cm-header-4, .markdown-rendered h4 {
+  color: #fbbf24 !important;
+}
+
+/* Styled Markdown Tables */
+.markdown-rendered table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+  margin: 1rem 0;
+}
+
+.markdown-rendered th {
+  background: linear-gradient(90deg, #1e1b4b 0%, #311b92 100%) !important;
+  color: #c084fc !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.85em;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+}
+
+.markdown-rendered td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.markdown-rendered tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.markdown-rendered tr:hover {
+  background-color: rgba(168, 85, 247, 0.08);
+}
+
+/* Enhanced Callout Glows */
+.callout[data-callout="note"] {
+  border-left-color: #3b82f6 !important;
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+.callout[data-callout="tip"], .callout[data-callout="success"] {
+  border-left-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+.callout[data-callout="important"], .callout[data-callout="abstract"] {
+  border-left-color: #a855f7 !important;
+  background-color: rgba(168, 85, 247, 0.08) !important;
+}
+
+.callout[data-callout="warning"] {
+  border-left-color: #f59e0b !important;
+  background-color: rgba(245, 158, 11, 0.08) !important;
+}
+
+.callout[data-callout="caution"] {
+  border-left-color: #f43f5e !important;
+  background-color: rgba(244, 63, 94, 0.08) !important;
+}
+
+/* Tag Pills */
+.tag {
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%) !important;
+  color: #ffffff !important;
+  border-radius: 12px !important;
+  padding: 3px 10px !important;
+  font-weight: 600;
+  font-size: 0.8em;
+}
+
+/* Checkbox Style */
+.task-list-item-checkbox:checked {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+}

@@ -1,0 +1,25 @@
+# 📋 CEO TASK ASSIGNMENT: AGENT 01 (SYSTEMS ARCHITECT)
+
+> [!IMPORTANT] **CEO Directive for Agent 01**
+> **Target Files**: core/config.py, core/db.py, core/queue.py, core/logger.py, main.py
+> **Primary Model**: Gemini 3.6 Flash (High Effort)
+> **Free Fallback**: deepseek-v4-flash-free (200k Context)
+
+---
+
+## 🎯 Central Hub Connections
+- 💎 **[[Index| Master Vault Index]]**
+- 👑 **[[CEO-Operational-Guide| CEO Orchestrator Guide]]**
+- 🤖 **[[Agent-01-Systems-Architect| Agent 01 Hub]]**
+
+---
+
+## 📋 Assigned Tasks Matrix
+
+| Task ID | Task Title | Priority | Status | Target Deliverable |
+| :---: | :--- | :---: | :---: | :--- |
+| **TSK-A01-01** | Build core/config.py Parser | HIGH | [x] COMPLETED | Parse config.json and .env with strict API key validation |
+| **TSK-A01-02** | Build core/db.py SQLite Schema | CRITICAL | [x] COMPLETED | Initialize accounts, jobs, clips, logs with WAL mode & FKs |
+| **TSK-A01-03** | Build core/queue.py State Engine | CRITICAL | [x] COMPLETED | Implement 8-stage state machine & atomic with db.transaction(): helpers |
+| **TSK-A01-04** | Build Auto-Recovery & Scheduler | HIGH | [x] COMPLETED | Check disk artifacts on daemon restart & dispatch jobs round-robin |
+| **TSK-A01-05** | Build main.py Daemon Supervisor | HIGH | [x] COMPLETED | CLI entrypoint with --daemon, --add-url, --add-account flags |

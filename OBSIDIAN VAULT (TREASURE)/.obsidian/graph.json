@@ -1,0 +1,149 @@
+{
+  "collapse-filter": false,
+  "search": "",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "file:Task-Assignment",
+      "color": {
+        "a": 1,
+        "rgb": 1096065
+      }
+    },
+    {
+      "query": "path:Assigned-Tasks",
+      "color": {
+        "a": 1,
+        "rgb": 1096065
+      }
+    },
+    {
+      "query": "file:CEO",
+      "color": {
+        "a": 1,
+        "rgb": 14753096
+      }
+    },
+    {
+      "query": "file:Agent-01",
+      "color": {
+        "a": 1,
+        "rgb": 440020
+      }
+    },
+    {
+      "query": "file:Agent-02",
+      "color": {
+        "a": 1,
+        "rgb": 1095809
+      }
+    },
+    {
+      "query": "file:Agent-03",
+      "color": {
+        "a": 1,
+        "rgb": 16096779
+      }
+    },
+    {
+      "query": "file:Agent-04",
+      "color": {
+        "a": 1,
+        "rgb": 9133302
+      }
+    },
+    {
+      "query": "file:Agent-05",
+      "color": {
+        "a": 1,
+        "rgb": 16347926
+      }
+    },
+    {
+      "query": "file:Agent-06",
+      "color": {
+        "a": 1,
+        "rgb": 16007006
+      }
+    },
+    {
+      "query": "file:AGENTS.md",
+      "color": {
+        "a": 1,
+        "rgb": 16347926
+      }
+    },
+    {
+      "query": "file:PLANS.md",
+      "color": {
+        "a": 1,
+        "rgb": 15485081
+      }
+    },
+    {
+      "query": "path:PLANS",
+      "color": {
+        "a": 1,
+        "rgb": 15485081
+      }
+    },
+    {
+      "query": "path:01-Hub",
+      "color": {
+        "a": 1,
+        "rgb": 11027199
+      }
+    },
+    {
+      "query": "path:02-Projects",
+      "color": {
+        "a": 1,
+        "rgb": 3462041
+      }
+    },
+    {
+      "query": "path:03-Tasks",
+      "color": {
+        "a": 1,
+        "rgb": 16498468
+      }
+    },
+    {
+      "query": "path:06-Decisions",
+      "color": {
+        "a": 1,
+        "rgb": 12616956
+      }
+    },
+    {
+      "query": "path:08-Logs",
+      "color": {
+        "a": 1,
+        "rgb": 4182903
+      }
+    },
+    {
+      "query": "path:00-Templates",
+      "color": {
+        "a": 1,
+        "rgb": 8421504
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": true,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1.5,
+  "lineSizeMultiplier": 1.3,
+  "collapse-forces": false,
+  "centerStrength": 0.5,
+  "repelStrength": 14,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 0.25883865621816243,
+  "close": true
+}
