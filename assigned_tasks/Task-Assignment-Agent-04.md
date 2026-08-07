@@ -18,7 +18,7 @@
 
 | Task ID | Task Title | Priority | Status | Target Deliverable |
 | :---: | :--- | :---: | :---: | :--- |
-| **TSK-A04-01** | Build FastAPI Localhost Server | HIGH | [ ] PENDING | Create HTTP endpoints (/api/clips/pending, /media/) on :8000 |
-| **TSK-A04-02** | Build Mobile Dark Dashboard | CRITICAL | [ ] PENDING | Responsive HTML5 layout with virality badges & account filter pills |
-| **TSK-A04-03** | Build 9:16 Video Player Cards | CRITICAL | [ ] PENDING | HTML5 video preview container & quick subtitle editor modal |
-| **TSK-A04-04** | Implement 1-Tap Clip Approval | HIGH | [ ] PENDING | Fast REST API call (/api/clips/{id}/approve) with optimistic UI removal |
+| **TSK-A04-01** | Build FastAPI Localhost Server | HIGH | [x] COMPLETED | Create HTTP endpoints (/api/clips/pending, /media/) on :8000 |
+| **TSK-A04-02** | Build Mobile Dark Dashboard | CRITICAL | [x] COMPLETED | Responsive HTML5 layout with virality badges & account filter pills |
+| **TSK-A04-03** | Build 9:16 Video Player Cards | CRITICAL | [x] COMPLETED | HTML5 video preview container & quick subtitle editor modal |
+| **TSK-A04-04** | Implement 1-Tap Clip Approval | HIGH | [x] COMPLETED | Fast REST API call (/api/clips/{id}/approve) with optimistic UI removal |

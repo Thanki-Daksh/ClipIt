@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ClipIt — Short-Form Clip Review Dashboard</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Custom Dark Mode Glassmorphism Styles -->
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="antialiased">
+
+  <!-- Header Bar with Mobile Daemon Health Widget -->
+  <header class="glass-panel header-bar mb-3">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
+          <i data-lucide="scissors" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <h1 class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-gray-100 to-gray-400 bg-clip-text text-transparent">
+            ClipIt
+          </h1>
+          <p class="text-xs text-gray-400 font-medium">1-Tap Clip Approver</p>
+        </div>
+      </div>
+
+      <!-- Mobile Daemon Health Widget -->
+      <div class="flex items-center gap-3">
+        <div class="status-badge" id="daemonWidget">
+          <span class="status-dot"></span>
+          <span id="batteryStatus" class="flex items-center gap-1 text-gray-300">
+            <i data-lucide="battery-charging" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span id="batteryText">95%</span>
+          </span>
+          <span class="text-gray-600">|</span>
+          <span id="queueCountStatus" class="text-purple-400 font-bold">
+            <span id="queueText">0</span> Clips
+          </span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Account Filter Pills -->
+  <nav class="max-w-7xl mx-auto px-4 mb-3">
+    <div class="filter-pills-container" id="accountFilters">
+      <button class="pill-btn active" onclick="filterAccount('all')">🔥 All Clips</button>
+      <button class="pill-btn" onclick="filterAccount('@tech_insider')">@tech_insider</button>
+      <button class="pill-btn" onclick="filterAccount('@ai_daily')">@ai_daily</button>
+      <button class="pill-btn" onclick="filterAccount('@dev_hacks')">@dev_hacks</button>
+    </div>
+  </nav>
+
+  <!-- Main Grid Feed for 9:16 Video Player Cards -->
+  <main class="w-full">
+    <div id="clipsGrid" class="clips-grid">
+      <!-- Dynamic Clip Cards populated by app.js -->
+    </div>
+
+    <!-- Empty State Container -->
+    <div id="emptyState" class="hidden text-center py-20 px-4">
+      <div class="w-16 h-16 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-4 text-purple-400">
+        <i data-lucide="sparkles" class="w-8 h-8"></i>
+      </div>
+      <h3 class="text-xl font-bold text-white mb-1">Queue Cleared!</h3>
+      <p class="text-gray-400 text-sm max-w-md mx-auto">
+        All short clips have been reviewed and approved. New clips will appear here automatically once generated.
+      </p>
+    </div>
+  </main>
+
+  <!-- Subtitle Editor Modal -->
+  {% include 'clip_modal.html' %}
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Dynamic JS Engine -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

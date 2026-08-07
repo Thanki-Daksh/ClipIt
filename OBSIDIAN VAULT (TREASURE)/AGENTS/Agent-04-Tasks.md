@@ -9,10 +9,10 @@
 - 💻 **[[Agent-04-Frontend-Mobile-UI-Dev| Back to Agent 04 Hub]]**
 
 ## 📌 Active Tasks
-- [ ] Build FastAPI localhost web server (`ui/app.py`)
-- [ ] Build mobile dark-mode HTML template (`ui/templates/index.html`)
-- [ ] Build 9:16 HTML5 video preview card & modal editor (`ui/static/js/app.js`)
-- [ ] Implement 1-tap clip approval REST API (`/api/clips/{id}/approve`)
+- [x] Build FastAPI localhost web server (`ui/app.py`)
+- [x] Build mobile dark-mode HTML template (`ui/templates/index.html`)
+- [x] Build 9:16 HTML5 video preview card & modal editor (`ui/static/js/app.js`)
+- [x] Implement 1-tap clip approval REST API (`/api/clips/{id}/approve`)
 
 
 
