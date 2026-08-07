@@ -53,17 +53,56 @@
     </div>
   </header>
 
-  <!-- Account Filter Pills -->
+  <!-- Real-Time Pipeline Progress Bar Widget (TSK-A04-06) -->
+  <section class="max-w-7xl mx-auto px-4 mb-3">
+    <div class="glass-panel p-3.5 rounded-2xl relative overflow-hidden" id="pipelineProgressContainer">
+      <div class="flex justify-between items-center mb-1.5">
+        <div class="flex items-center gap-2">
+          <i data-lucide="cpu" class="w-4 h-4 text-purple-400 animate-pulse"></i>
+          <span id="pipelineStageText" class="text-xs font-bold text-gray-200">FFmpeg 9:16 Crop & Subtitle Render</span>
+        </div>
+        <span id="pipelinePercentText" class="text-xs font-extrabold text-cyan-400">78%</span>
+      </div>
+
+      <!-- Progress Track -->
+      <div class="w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/5 relative">
+        <div id="pipelineProgressBar" class="h-full bg-gradient-to-r from-purple-500 via-cyan-400 to-emerald-400 transition-all duration-500 rounded-full shadow-lg shadow-cyan-500/50" style="width: 78%;"></div>
+      </div>
+
+      <div class="flex justify-between items-center mt-1.5 text-[10px] text-gray-400 font-medium">
+        <span>Active Job: <strong id="activeJobText" class="text-gray-300">clip_104</strong></span>
+        <span>ETA: <strong id="etaText" class="text-emerald-400">~12s remaining</strong></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Account Filter Pills & Batch Action Toolbar (TSK-A04-07) -->
   <nav class="max-w-7xl mx-auto px-4 mb-3">
-    <div class="filter-pills-container" id="accountFilters">
-      <button class="pill-btn active" onclick="filterAccount('all')">🔥 All Clips</button>
-      <button class="pill-btn" onclick="filterAccount('@tech_insider')">@tech_insider</button>
-      <button class="pill-btn" onclick="filterAccount('@ai_daily')">@ai_daily</button>
-      <button class="pill-btn" onclick="filterAccount('@dev_hacks')">@dev_hacks</button>
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <!-- Filter Pills -->
+      <div class="filter-pills-container" id="accountFilters">
+        <button class="pill-btn active" onclick="filterAccount('all')">🔥 All Clips</button>
+        <button class="pill-btn" onclick="filterAccount('@tech_insider')">@tech_insider</button>
+        <button class="pill-btn" onclick="filterAccount('@ai_daily')">@ai_daily</button>
+        <button class="pill-btn" onclick="filterAccount('@dev_hacks')">@dev_hacks</button>
+      </div>
+
+      <!-- Batch Actions Toolbar -->
+      <div class="flex items-center gap-2 px-1">
+        <button onclick="toggleSelectAll()" id="btnSelectAll" class="px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-300 bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1.5">
+          <i data-lucide="check-square" class="w-3.5 h-3.5 text-purple-400"></i> Select All
+        </button>
+        <button onclick="batchApproveSelected()" id="btnBatchApprove" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-green-500 shadow-md shadow-emerald-500/20 hover:opacity-90 flex items-center gap-1">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i> Approve Selected (<span id="selectedCountApprove">0</span>)
+        </button>
+        <button onclick="batchRejectSelected()" id="btnBatchReject" class="px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 flex items-center gap-1">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i> Reject
+        </button>
+      </div>
     </div>
   </nav>
 
-  <!-- Main Grid Feed for 9:16 Video Player Cards -->
+  <!-- Main Grid Feed for 9:16 Video Player Cards (TSK-A04-08 Touch Gestures enabled) -->
   <main class="w-full">
     <div id="clipsGrid" class="clips-grid">
       <!-- Dynamic Clip Cards populated by app.js -->
@@ -81,7 +120,7 @@
     </div>
   </main>
 
-  <!-- Subtitle Editor Modal -->
+  <!-- Subtitle Editor Modal (TSK-A04-05 Inline Editor) -->
   {% include 'clip_modal.html' %}
 
   <!-- Toast Notification Container -->

@@ -1,8 +1,8 @@
 """
 modules/watcher.py - YouTube RSS Feed Parser & Watch Folder Observer for ClipIt.
 
-Parses YouTube channel RSS feeds (by Channel ID, @handle, or URL) and scans local
-watch directories for new video files.
+Parses YouTube channel RSS feeds (by Channel ID, @handle, or URL), filters out
+YouTube Shorts and live streams, and scans local watch directories for video files.
 """
 
 import os
@@ -24,19 +24,33 @@ class VideoItem(BaseModel):
     thumbnail_url: Optional[str] = None
     source_type: str = "youtube"  # 'youtube' or 'local'
     file_path: Optional[str] = None
+    is_short: bool = False
+    is_live: bool = False
+    duration: Optional[float] = None
 
 
 class YouTubeWatcher:
-    """YouTube RSS Feed parser and watch directory observer."""
+    """YouTube RSS Feed parser and watch directory observer with Shorts/Live filtering."""
 
     RSS_BASE_URL = "https://www.youtube.com/feeds/videos.xml"
     ATOM_NS = {"atom": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015", "media": "http://search.yahoo.com/mrss/"}
 
-    def __init__(self, headers: Optional[Dict[str, str]] = None):
+    def __init__(self, headers: Optional[Dict[str, str]] = None, filter_shorts: bool = True, filter_live: bool = True):
         self.session = requests.Session()
         self.session.headers.update(headers or {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         })
+        self.filter_shorts = filter_shorts
+        self.filter_live = filter_live
+
+    @staticmethod
+    def is_youtube_short(url: str, title: str = "") -> bool:
+        """Check if video is a YouTube Short via URL pattern or title tag."""
+        if "/shorts/" in url.lower():
+            return True
+        if "#shorts" in title.lower() or "#short" in title.lower():
+            return True
+        return False
 
     def extract_channel_id(self, channel_input: str) -> Optional[str]:
         """Extract YouTube channel ID from direct ID, @handle, or channel URL."""
@@ -62,7 +76,6 @@ class YouTubeWatcher:
         try:
             resp = self.session.get(url, timeout=10)
             if resp.status_code == 200:
-                # Look for browse_id or rssUrl in page source
                 match_id = re.search(r'"browseId":"(UC[\w-]{22})"', resp.text)
                 if match_id:
                     return match_id.group(1)
@@ -75,7 +88,7 @@ class YouTubeWatcher:
         return None
 
     def fetch_rss_feed(self, channel_input: str) -> List[VideoItem]:
-        """Fetch and parse RSS feed for a YouTube channel."""
+        """Fetch and parse RSS feed for a YouTube channel with optional filtering."""
         channel_id = self.extract_channel_id(channel_input)
         if not channel_id:
             print(f"[Watcher] Unable to determine channel ID for: {channel_input}")
@@ -87,7 +100,20 @@ class YouTubeWatcher:
             if resp.status_code != 200:
                 print(f"[Watcher] RSS HTTP {resp.status_code} for channel {channel_id}")
                 return []
-            return self._parse_rss_xml(resp.text)
+            videos = self._parse_rss_xml(resp.text)
+
+            # Apply filters
+            filtered_videos: List[VideoItem] = []
+            for v in videos:
+                if self.filter_shorts and v.is_short:
+                    print(f"[Watcher] Filtering out YouTube Short: {v.title} ({v.video_id})")
+                    continue
+                if self.filter_live and v.is_live:
+                    print(f"[Watcher] Filtering out Live stream: {v.title} ({v.video_id})")
+                    continue
+                filtered_videos.append(v)
+
+            return filtered_videos
         except Exception as e:
             print(f"[Watcher] Error fetching RSS feed for channel {channel_id}: {e}")
             return []
@@ -115,6 +141,7 @@ class YouTubeWatcher:
                     chan_id = channel_id_elem.text if channel_id_elem is not None else None
 
                     thumb_url = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+                    is_short = self.is_youtube_short(link, title)
 
                     items.append(VideoItem(
                         video_id=vid,
@@ -124,7 +151,8 @@ class YouTubeWatcher:
                         channel_id=chan_id,
                         channel_title=author,
                         thumbnail_url=thumb_url,
-                        source_type="youtube"
+                        source_type="youtube",
+                        is_short=is_short
                     ))
         except ET.ParseError as pe:
             print(f"[Watcher] XML parse error: {pe}")

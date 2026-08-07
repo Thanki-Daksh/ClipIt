@@ -5,6 +5,8 @@ Generates Advanced SubStation Alpha (.ass) files with word-by-word active
 highlight (BGR color codes) and burns them onto vertical clips via the
 `subtitles` FFmpeg filter without audio sync drift.
 
+Supports three built-in style presets: VIRAL_YELLOW, MINIMAL_WHITE, NEON_CYAN.
+
 Owned by Agent 03 (Media & Graphics Engineer). Do not edit by other agents.
 """
 
@@ -35,11 +37,41 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default, {font_name}, {font_size}, &H00FFFFFF, &H0000FFFF, &H00000000, &H80000000, -1, 0, 0, 0, 100, 100, 0, 0, 1, 4, 2, 2, 80, 80, 480
+Style: Default, {font_name}, {font_size}, {primary}, {secondary}, {outline}, {back}, -1, 0, 0, 0, 100, 100, 0, 0, 1, 4, 2, 2, 80, 80, 480
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
+
+# ---- Built-in style presets ------------------------------------------- #
+# Each preset maps a name to (primary, secondary/highlight, outline, back,
+# font_name, font_size). Secondary colour is the active-word highlight.
+ASS_PRESETS = {
+    "VIRAL_YELLOW": {
+        "primary": ASS_WHITE,
+        "highlight": ASS_YELLOW,
+        "outline": ASS_BLACK_OUTLINE,
+        "back": ASS_DARK_BACK,
+        "font_name": "Montserrat ExtraBold",
+        "font_size": 64,
+    },
+    "MINIMAL_WHITE": {
+        "primary": ASS_WHITE,
+        "highlight": ASS_WHITE,
+        "outline": "&H00333333",
+        "back": "&H00000000",
+        "font_name": "Arial",
+        "font_size": 56,
+    },
+    "NEON_CYAN": {
+        "primary": "&H00FFFFFF",
+        "highlight": ASS_CYAN,
+        "outline": "&H00141414",
+        "back": "&H66000000",
+        "font_name": "Montserrat ExtraBold",
+        "font_size": 68,
+    },
+}
 
 
 class ASSSubtitleGenerator:
@@ -50,23 +82,54 @@ class ASSSubtitleGenerator:
     reset, producing the 'active word' karaoke effect.
     """
 
-    def __init__(self, font_name: str = "Montserrat ExtraBold", font_size: int = 64) -> None:
-        self.font_name = font_name
-        self.font_size = font_size
+    def __init__(
+        self,
+        font_name: str = "Montserrat ExtraBold",
+        font_size: int = 64,
+        preset: Optional[str] = None,
+    ) -> None:
+        if preset:
+            spec = ASS_PRESETS.get(str(preset).upper())
+            if spec is None:
+                raise ValueError(
+                    f"Unknown ASS preset '{preset}'. "
+                    f"Available: {', '.join(ASS_PRESETS)}"
+                )
+            self.preset_name = str(preset).upper()
+            self.font_name = spec["font_name"]
+            self.font_size = spec["font_size"]
+            self.primary = spec["primary"]
+            self.highlight = spec["highlight"]
+            self.outline = spec["outline"]
+            self.back = spec["back"]
+        else:
+            self.preset_name = None
+            self.font_name = font_name
+            self.font_size = font_size
+            self.primary = ASS_WHITE
+            self.highlight = ASS_YELLOW
+            self.outline = ASS_BLACK_OUTLINE
+            self.back = ASS_DARK_BACK
 
     def generate_ass(
         self,
         words: List[Dict[str, Any]],
         output_ass_path: str,
         chunk_size: int = 4,
-        highlight_color: str = ASS_YELLOW,
-        base_color: str = ASS_WHITE,
+        highlight_color: Optional[str] = None,
+        base_color: Optional[str] = None,
+        primary: Optional[str] = None,
+        outline: Optional[str] = None,
+        back: Optional[str] = None,
     ) -> str:
         """
         Write an .ass file from a list of word dicts.
 
         Each word dict expects keys: 'word', 'start' (sec), 'end' (sec).
         Optionally 'text' / 'start_time' keys are tolerated for interop.
+
+        When the generator was built with a ``preset``, the preset's palette
+        is used unless explicitly overridden here.
 
         Returns the output path.
         """
@@ -77,7 +140,16 @@ class ASSSubtitleGenerator:
         if sum(1 for w in normalized if w["text"].strip()) == 0:
             raise ValueError("No non-empty subtitle words provided.")
 
-        lines = [ASS_HEADER.format(font_name=self.font_name, font_size=self.font_size)]
+        pc = primary or self.primary
+        oc = outline or self.outline
+        bc = back or self.back
+        hl = highlight_color or self.highlight
+        base = base_color or pc
+
+        lines = [ASS_HEADER.format(
+            font_name=self.font_name, font_size=self.font_size,
+            primary=pc, secondary=hl, outline=oc, back=bc,
+        )]
 
         # Chunk consecutive words into dialogue lines of <= chunk_size words.
         for i in range(0, len(normalized), chunk_size):
@@ -91,7 +163,7 @@ class ASSSubtitleGenerator:
             for word in chunk:
                 w = self._escape(word["text"])
                 # active word carries the highlight color inline (BGR override)
-                text_parts.append(f"{{\\c{highlight_color}&}}{w}{{\\c{base_color}&}}")
+                text_parts.append(f"{{\\c{hl}&}}{w}{{\\c{base}&}}")
 
             line_text = " ".join(text_parts)
             start_str = self._format_timestamp(start)

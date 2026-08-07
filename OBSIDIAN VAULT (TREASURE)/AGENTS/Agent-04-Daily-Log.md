@@ -10,10 +10,14 @@
 
 ## 2026-08-07
 - Designed mobile glassmorphism dashboard layout and 9:16 card CSS containers (`ui/static/css/styles.css`).
-- Built FastAPI REST backend (`ui/app.py`) for `/api/clips/pending`, `/api/clips/{id}/approve`, `/api/clips/{id}/reject`, `/api/clips/{id}/update_subtitles`, `/api/system/status`, and `/media/`.
+- Built FastAPI REST backend (`ui/app.py`) for `/api/clips/pending`, `/api/clips/{id}/approve`, `/api/clips/{id}/reject`, `/api/clips/{id}/update_subtitles`, `/api/system/status`, `/api/clips/batch_approve`, `/api/clips/batch_reject`, and `/media/`.
 - Implemented responsive mobile HTML dashboard template (`ui/templates/index.html`) & subtitle editor modal (`ui/templates/clip_modal.html`).
 - Built dynamic 1-tap approval engine and auto-refreshing system metrics widget in (`ui/static/js/app.js`).
-- Verified zero-error compilation and clean app initialization via `py_compile`.
+- Implemented **Modal Subtitle Inline Editor (TSK-A04-05)** with live UPPERCASE formatting & duration tracking.
+- Implemented **Real-Time Pipeline Progress Bar (TSK-A04-06)** with rendering stage, progress %, active job ID, and ETA display.
+- Implemented **Batch Approval Actions (TSK-A04-07)** with multi-select checkboxes, "Select All", and batch approve/reject API integration.
+- Implemented **Mobile PWA Touch Gestures (TSK-A04-08)** with touch horizontal swipe-right to approve and swipe-left to reject.
+- Verified zero-error compilation and clean REST API endpoint execution via `py_compile` & `fastapi.testclient`.
 
 
 

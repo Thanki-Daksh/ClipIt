@@ -19,6 +19,7 @@
 | **2026-08-07** | Agent 03 | `🟢 PASSED` | Validated storage check threshold |
 | **2026-08-07** | Agent 01 | `🟢 PASSED` | start.sh writes daemon PID to storage/clipit.pid (5s TERM→KILL wait) |
 | **2026-08-07** | Agent 03 | `🟢 PASSED` | termux_monitor.py free-disk audit (`free_disk_mb` + 500 MB threshold) fires before render |
+| **2026-08-07** | Agent 01 | `🟢 PASSED` | monitor now also audits daemon liveness + writes concurrency.json for main.py to cap pool |
 
 
 

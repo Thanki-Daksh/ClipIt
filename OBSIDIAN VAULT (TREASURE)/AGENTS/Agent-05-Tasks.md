@@ -13,6 +13,10 @@
 - [x] Build clean shutdown script (`scripts/stop.sh`) with wake-lock release
 - [x] Build battery & thermal monitor (`scripts/termux_monitor.py`)
 - [x] Build Android boot auto-start helper script (`scripts/boot_recovery.sh`)
+- [x] Build Wi-Fi/metered-network detection (pause downloads off Wi-Fi)
+- [x] Build 1 GB disk storage hold (pause pipeline below 1 GB free)
+- [x] Build Termux-Boot auto-start service (`boot_recovery.sh --install`)
+- [x] Build CPU low-power governor switch (thermal -> concurrency.json)
 
 
 

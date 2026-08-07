@@ -186,13 +186,13 @@ class QueueEngine:
             if job["status"] in TERMINAL_STAGES:
                 continue
             resume = self._resume_stage(job)
-            if resume and resume != job["status"]:
+            if resume != job["status"]:
                 log.info("recovery: job %s %s -> %s", job["id"], job["status"], resume)
                 self.db.update_job_status(job["id"], resume)
                 self.db.log_event("WARNING", f"crash recovery: {job['status']} -> {resume}",
                                   job_id=job["id"], account_id=job["account_id"])
                 resumed.append(job["id"])
-            elif resume == job["status"]:
+            else:
                 # Already at the correct resume stage; leave it for the scheduler.
                 log.info("recovery: job %s continues at %s", job["id"], resume)
         return resumed
@@ -221,6 +221,38 @@ class QueueEngine:
         if status == METADATA:
             return COMPLETED if has_clips else (METADATA if has_raw else PENDING)
         return PENDING
+
+    def requeue_stuck(self, clear_error: bool = False) -> list[str]:
+        """
+        Crash re-queue engine (TSK-A01-08): unconditionally reset every job
+        that is stuck in a mid-pipeline working stage back to PENDING so it
+        starts over from the top on the next daemon tick. Unlike ``recover()``,
+        this ignores on-disk artifacts and is used when partial state could
+        otherwise produce corrupt output. Returns the requeued job ids.
+        """
+        jobs = self.db.list_jobs()
+        requeued: list[str] = []
+        with self.db.transaction() as conn:
+            for job in jobs:
+                if job["status"] not in WORKING_STAGES:
+                    continue
+                if clear_error:
+                    conn.execute(
+                        "UPDATE jobs SET status='PENDING', error_log=NULL, "
+                        "updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                        (job["id"],),
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE jobs SET status='PENDING', updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                        (job["id"],),
+                    )
+                requeued.append(job["id"])
+                self.db.log_event("WARNING", f"crash re-queue: {job['status']} -> PENDING",
+                                  job_id=job["id"], account_id=job["account_id"])
+        if requeued:
+            log.warning("requeued %s stuck job(s) to PENDING: %s", len(requeued), requeued)
+        return requeued
 
     # ------------------------------------------------------------------
     # N-account round-robin scheduler

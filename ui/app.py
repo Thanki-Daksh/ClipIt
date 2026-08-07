@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 UI_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "storage" / "clipit.db"
 
-app = FastAPI(title="ClipIt Mobile Dashboard API", version="1.0.0")
+app = FastAPI(title="ClipIt Mobile Dashboard API", version="1.1.0")
 
 # Static files & templates setup
 app.mount("/static", StaticFiles(directory=str(UI_DIR / "static")), name="static")
@@ -28,6 +28,10 @@ class SubtitleItem(BaseModel):
 
 class UpdateSubtitlesPayload(BaseModel):
     subtitles: List[SubtitleItem]
+
+
+class BatchActionPayload(BaseModel):
+    clip_ids: List[str]
 
 
 def get_db_connection():
@@ -195,6 +199,15 @@ async def get_system_status():
     except Exception:
         pass
 
+    # Real-time pipeline processing telemetry simulation
+    pipeline = {
+        "is_active": True,
+        "current_stage": "FFmpeg 9:16 Crop & Subtitle Render",
+        "progress_percent": 78,
+        "current_clip_id": "clip_104",
+        "eta_seconds": 12
+    }
+
     return {
         "status": "online",
         "daemon": {
@@ -204,7 +217,8 @@ async def get_system_status():
             "cpu_usage": cpu_usage,
             "active_workers": 2,
             "pending_queue": pending_count
-        }
+        },
+        "pipeline": pipeline
     }
 
 
@@ -219,7 +233,6 @@ async def approve_clip(clip_id: str):
     except Exception:
         pass
 
-    # Update in-memory mock if present
     for clip in MOCK_CLIPS:
         if clip["id"] == clip_id:
             clip["status"] = "approved"
@@ -243,6 +256,48 @@ async def reject_clip(clip_id: str):
             clip["status"] = "rejected"
 
     return {"status": "success", "message": f"Clip {clip_id} rejected."}
+
+
+@app.post("/api/clips/batch_approve")
+async def batch_approve_clips(payload: BatchActionPayload):
+    updated = 0
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.executemany("UPDATE clips SET status = 'approved' WHERE id = ?", [(cid,) for cid in payload.clip_ids])
+        conn.commit()
+        conn.close()
+        updated = len(payload.clip_ids)
+    except Exception:
+        pass
+
+    for clip in MOCK_CLIPS:
+        if clip["id"] in payload.clip_ids:
+            clip["status"] = "approved"
+            updated += 1
+
+    return {"status": "success", "message": f"Approved {len(payload.clip_ids)} clips in batch.", "count": updated}
+
+
+@app.post("/api/clips/batch_reject")
+async def batch_reject_clips(payload: BatchActionPayload):
+    updated = 0
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.executemany("UPDATE clips SET status = 'rejected' WHERE id = ?", [(cid,) for cid in payload.clip_ids])
+        conn.commit()
+        conn.close()
+        updated = len(payload.clip_ids)
+    except Exception:
+        pass
+
+    for clip in MOCK_CLIPS:
+        if clip["id"] in payload.clip_ids:
+            clip["status"] = "rejected"
+            updated += 1
+
+    return {"status": "success", "message": f"Rejected {len(payload.clip_ids)} clips in batch.", "count": updated}
 
 
 @app.post("/api/clips/{clip_id}/update_subtitles")

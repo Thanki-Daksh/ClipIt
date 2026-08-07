@@ -2,17 +2,56 @@
 modules/transcriber.py - Groq/OpenAI Whisper Speech-to-Text Transcriber for ClipIt.
 
 Fetches word-level timestamped transcripts using Groq Whisper API (whisper-large-v3)
-or OpenAI Whisper API. Handles automatic audio chunking for files > 25MB.
+or OpenAI Whisper API. Handles automatic audio chunking for files > 25MB and exponential retry backoff.
 """
 
 import json
 import math
 import os
+import random
 import subprocess
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 import requests
 from pydantic import BaseModel, Field
+
+T = TypeVar("T")
+
+
+def retry_with_backoff(
+    func: Callable[..., T],
+    max_retries: int = 4,
+    initial_delay: float = 2.0,
+    backoff_factor: float = 2.0,
+    jitter: bool = True,
+    retry_status_codes: Optional[List[int]] = None
+) -> T:
+    """Execute a callable with exponential retry backoff for rate-limits (429) and server errors (5xx)."""
+    status_codes = retry_status_codes or [429, 500, 502, 503, 504]
+    delay = initial_delay
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            return func()
+        except requests.exceptions.HTTPError as http_err:
+            status = http_err.response.status_code if http_err.response is not None else 0
+            if status in status_codes and attempt < max_retries:
+                sleep_time = delay + (random.uniform(0, 1.0) if jitter else 0.0)
+                print(f"[RetryClient] HTTP {status} encountered. Retrying in {sleep_time:.2f}s (Attempt {attempt}/{max_retries})...")
+                time.sleep(sleep_time)
+                delay *= backoff_factor
+            else:
+                raise
+        except (requests.exceptions.RequestException, ConnectionError, TimeoutError) as req_err:
+            if attempt < max_retries:
+                sleep_time = delay + (random.uniform(0, 1.0) if jitter else 0.0)
+                print(f"[RetryClient] Network error: {req_err}. Retrying in {sleep_time:.2f}s (Attempt {attempt}/{max_retries})...")
+                time.sleep(sleep_time)
+                delay *= backoff_factor
+            else:
+                raise
+
+    raise RuntimeError("Failed after maximum retries.")
 
 
 class WordTimestamp(BaseModel):
@@ -74,19 +113,19 @@ class WhisperTranscriber:
         return None
 
     def transcribe(self, audio_path: str, model_override: Optional[str] = None) -> TranscriptResult:
-        """Transcribe an audio file and return word-level timestamps."""
+        """Transcribe an audio file and return word-level timestamps. Auto-splits > 25MB files."""
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
         file_size = os.path.getsize(audio_path)
         if file_size > self.MAX_FILE_SIZE_BYTES:
-            print(f"[Transcriber] Audio file size ({file_size / (1024*1024):.2f}MB) exceeds limit. Splitting into chunks...")
+            print(f"[Transcriber] Audio file size ({file_size / (1024*1024):.2f}MB) exceeds 25MB limit. Splitting into chunks...")
             return self._transcribe_large_audio(audio_path, model_override)
         else:
             return self._transcribe_chunk(audio_path, time_offset=0.0, model_override=model_override)
 
     def _transcribe_chunk(self, audio_path: str, time_offset: float = 0.0, model_override: Optional[str] = None) -> TranscriptResult:
-        """Send a single audio chunk to the Whisper API."""
+        """Send a single audio chunk to the Whisper API with retry backoff."""
         if not self.api_key:
             raise ValueError(f"Missing API key for {self.provider.upper()} STT API.")
 
@@ -106,32 +145,17 @@ class WhisperTranscriber:
 
         print(f"[Transcriber] Transcribing {os.path.basename(audio_path)} via {self.provider.upper()} ({model_name})...")
 
-        max_retries = 3
-        for attempt in range(1, max_retries + 1):
-            try:
-                with open(audio_path, "rb") as audio_file:
-                    files = {
-                        "file": (os.path.basename(audio_path), audio_file, "audio/wav")
-                    }
-                    response = requests.post(url, headers=headers, data=data, files=files, timeout=120)
+        def _make_api_request() -> Dict[str, Any]:
+            with open(audio_path, "rb") as audio_file:
+                files = {
+                    "file": (os.path.basename(audio_path), audio_file, "audio/wav")
+                }
+                response = requests.post(url, headers=headers, data=data, files=files, timeout=120)
+            response.raise_for_status()
+            return response.json()
 
-                if response.status_code == 200:
-                    raw_json = response.json()
-                    return self._parse_whisper_json(raw_json, time_offset=time_offset)
-                elif response.status_code == 429:
-                    print(f"[Transcriber] Rate limited (429). Retrying in {attempt * 5}s...")
-                    time.sleep(attempt * 5)
-                else:
-                    print(f"[Transcriber] STT API Error (HTTP {response.status_code}): {response.text}")
-                    if attempt == max_retries:
-                        raise RuntimeError(f"STT API HTTP {response.status_code}: {response.text}")
-                    time.sleep(2)
-            except Exception as e:
-                print(f"[Transcriber] Attempt {attempt} failed: {e}")
-                if attempt == max_retries:
-                    raise
-
-        raise RuntimeError("STT transcription failed after max retries.")
+        raw_json = retry_with_backoff(_make_api_request, max_retries=4, initial_delay=3.0)
+        return self._parse_whisper_json(raw_json, time_offset=time_offset)
 
     def _parse_whisper_json(self, raw_json: Dict[str, Any], time_offset: float = 0.0) -> TranscriptResult:
         """Parse Whisper verbose_json output into TranscriptResult with offset adjustment."""
@@ -192,7 +216,7 @@ class WhisperTranscriber:
         """Split large audio file into ~10 minute chunks using FFmpeg and transcribe sequentially."""
         chunk_duration_sec = 600  # 10 minutes per chunk
         total_duration = self._get_audio_duration(audio_path)
-        num_chunks = math.ceil(total_duration / chunk_duration_sec)
+        num_chunks = math.ceil(total_duration / chunk_duration_sec) if total_duration > 0 else 1
 
         combined_text = []
         combined_segments: List[TranscriptSegment] = []

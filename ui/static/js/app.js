@@ -1,16 +1,22 @@
-// ClipIt Mobile Dashboard JavaScript Engine
+// ClipIt Mobile Dashboard JavaScript Engine (v1.1)
 
 let currentAccountFilter = 'all';
 let currentClips = [];
+let selectedClipIds = new Set();
 let editingClipId = null;
+
+// Touch Gesture Variables (TSK-A04-08)
+let touchStartX = 0;
+let touchStartY = 0;
+let currentSwipingCard = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   initIcons();
   fetchPendingClips();
   fetchSystemStatus();
 
-  // Poll system status every 5 seconds
-  setInterval(fetchSystemStatus, 5000);
+  // Poll system status & pipeline telemetry every 4 seconds
+  setInterval(fetchSystemStatus, 4000);
 });
 
 function initIcons() {
@@ -28,6 +34,9 @@ async function fetchPendingClips() {
 
     if (data.status === 'success') {
       currentClips = data.clips;
+      // Filter selected clip IDs to existing list
+      selectedClipIds = new Set([...selectedClipIds].filter(id => currentClips.some(c => c.id === id)));
+      updateSelectedCounter();
       renderClips(currentClips);
     }
   } catch (error) {
@@ -36,23 +45,41 @@ async function fetchPendingClips() {
   }
 }
 
-// Fetch system & daemon metrics
+// Fetch system & pipeline progress telemetry (TSK-A04-06)
 async function fetchSystemStatus() {
   try {
     const response = await fetch('/api/system/status');
     const data = await response.json();
 
-    if (data.status === 'online' && data.daemon) {
-      const { battery_percent, pending_queue, is_charging } = data.daemon;
-      
-      const batteryText = document.getElementById('batteryText');
-      const queueText = document.getElementById('queueText');
-      
-      if (batteryText) {
-        batteryText.innerText = `${battery_percent}%${is_charging ? ' ⚡' : ''}`;
+    if (data.status === 'online') {
+      if (data.daemon) {
+        const { battery_percent, pending_queue, is_charging } = data.daemon;
+        const batteryText = document.getElementById('batteryText');
+        const queueText = document.getElementById('queueText');
+        
+        if (batteryText) {
+          batteryText.innerText = `${battery_percent}%${is_charging ? ' ⚡' : ''}`;
+        }
+        if (queueText) {
+          queueText.innerText = pending_queue;
+        }
       }
-      if (queueText) {
-        queueText.innerText = pending_queue;
+
+      // Update Real-Time Pipeline Progress Bar (TSK-A04-06)
+      if (data.pipeline) {
+        const { current_stage, progress_percent, current_clip_id, eta_seconds } = data.pipeline;
+        
+        const stageText = document.getElementById('pipelineStageText');
+        const percentText = document.getElementById('pipelinePercentText');
+        const progressBar = document.getElementById('pipelineProgressBar');
+        const activeJobText = document.getElementById('activeJobText');
+        const etaText = document.getElementById('etaText');
+
+        if (stageText) stageText.innerText = current_stage || 'Processing Pipeline';
+        if (percentText) percentText.innerText = `${progress_percent}%`;
+        if (progressBar) progressBar.style.width = `${progress_percent}%`;
+        if (activeJobText) activeJobText.innerText = current_clip_id || 'clip_job';
+        if (etaText) etaText.innerText = `~${eta_seconds}s remaining`;
       }
     }
   } catch (error) {
@@ -74,11 +101,24 @@ function renderClips(clips) {
   emptyState.classList.add('hidden');
 
   grid.innerHTML = clips.map(clip => {
+    const isSelected = selectedClipIds.has(clip.id);
     const viralityClass = clip.virality_score >= 90 ? 'virality-high' : '';
     const videoSrc = clip.video_path ? `/media/${clip.video_path}` : '';
     
     return `
-      <div id="card-${clip.id}" class="clip-card glass-panel flex flex-col">
+      <div id="card-${clip.id}" 
+           class="clip-card glass-panel flex flex-col ${isSelected ? 'selected' : ''}"
+           ontouchstart="handleTouchStart(event, '${clip.id}')"
+           ontouchmove="handleTouchMove(event, '${clip.id}')"
+           ontouchend="handleTouchEnd(event, '${clip.id}')">
+        
+        <!-- Multi-Select Checkbox Badge (TSK-A04-07) -->
+        <div class="select-checkbox-badge ${isSelected ? 'checked' : ''}" 
+             onclick="toggleSelectClip(event, '${clip.id}')" 
+             title="Select for Batch Action">
+          ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}
+        </div>
+
         <!-- 9:16 Vertical Video Container -->
         <div class="video-container">
           <!-- Account Badge -->
@@ -116,14 +156,19 @@ function renderClips(clips) {
             <span class="font-bold text-purple-300">Hook:</span> ${escapeHtml(clip.hook_summary || 'Top performing high-converting moment.')}
           </div>
 
-          <!-- Action Bar (1-Tap Approval) -->
-          <div class="action-bar mt-2">
+          <!-- Touch gesture indicator hint (TSK-A04-08) -->
+          <div class="touch-hint sm:hidden">
+            👉 Swipe right to approve • Swipe left to reject 👈
+          </div>
+
+          <!-- Action Bar (1-Tap Approve/Reject) -->
+          <div class="action-bar mt-1">
             <button onclick="approveClip('${clip.id}')" class="btn-action btn-approve" title="1-Tap Approve">
               <i data-lucide="check-circle-2" class="w-4 h-4"></i> Approve
             </button>
             
-            <button onclick="openModal('${clip.id}')" class="btn-action btn-edit" title="Edit Subtitles">
-              <i data-lucide="edit-3" class="w-4 h-4"></i> Edit
+            <button onclick="openModal('${clip.id}')" class="btn-action btn-edit" title="Modal Inline Editor">
+              <i data-lucide="edit-3" class="w-4 h-4"></i> Subtitles
             </button>
 
             <button onclick="rejectClip('${clip.id}')" class="btn-action btn-reject" title="1-Tap Reject">
@@ -138,11 +183,156 @@ function renderClips(clips) {
   initIcons();
 }
 
+// Multi-Select & Batch Actions Logic (TSK-A04-07)
+function toggleSelectClip(event, clipId) {
+  event.stopPropagation();
+  if (selectedClipIds.has(clipId)) {
+    selectedClipIds.delete(clipId);
+  } else {
+    selectedClipIds.add(clipId);
+  }
+  updateSelectedCounter();
+  renderClips(currentClips);
+}
+
+function toggleSelectAll() {
+  if (selectedClipIds.size === currentClips.length && currentClips.length > 0) {
+    selectedClipIds.clear();
+  } else {
+    selectedClipIds = new Set(currentClips.map(c => c.id));
+  }
+  updateSelectedCounter();
+  renderClips(currentClips);
+}
+
+function updateSelectedCounter() {
+  const countSpan = document.getElementById('selectedCountApprove');
+  if (countSpan) {
+    countSpan.innerText = selectedClipIds.size;
+  }
+}
+
+async function batchApproveSelected() {
+  if (selectedClipIds.size === 0) {
+    showToast('Select clips to approve first', 'info');
+    return;
+  }
+
+  const idsToApprove = Array.from(selectedClipIds);
+  
+  // Optimistic UI removal
+  idsToApprove.forEach(id => {
+    const card = document.getElementById(`card-${id}`);
+    if (card) card.classList.add('card-approved-anim');
+  });
+
+  showToast(`⚡ Batch approving ${idsToApprove.length} clips...`, 'success');
+
+  try {
+    const response = await fetch('/api/clips/batch_approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clip_ids: idsToApprove })
+    });
+    const data = await response.json();
+
+    setTimeout(() => {
+      currentClips = currentClips.filter(c => !idsToApprove.includes(c.id));
+      selectedClipIds.clear();
+      updateSelectedCounter();
+      renderClips(currentClips);
+    }, 400);
+  } catch (error) {
+    console.error('Batch approve error:', error);
+    showToast('Batch approval failed', 'error');
+    fetchPendingClips();
+  }
+}
+
+async function batchRejectSelected() {
+  if (selectedClipIds.size === 0) {
+    showToast('Select clips to reject first', 'info');
+    return;
+  }
+
+  const idsToReject = Array.from(selectedClipIds);
+
+  idsToReject.forEach(id => {
+    const card = document.getElementById(`card-${id}`);
+    if (card) card.classList.add('card-rejected-anim');
+  });
+
+  showToast(`Batch rejecting ${idsToReject.length} clips...`, 'info');
+
+  try {
+    const response = await fetch('/api/clips/batch_reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clip_ids: idsToReject })
+    });
+    const data = await response.json();
+
+    setTimeout(() => {
+      currentClips = currentClips.filter(c => !idsToReject.includes(c.id));
+      selectedClipIds.clear();
+      updateSelectedCounter();
+      renderClips(currentClips);
+    }, 400);
+  } catch (error) {
+    console.error('Batch reject error:', error);
+    showToast('Batch rejection failed', 'error');
+    fetchPendingClips();
+  }
+}
+
+// Touch Gesture Handlers (TSK-A04-08 Mobile Swipe)
+function handleTouchStart(event, clipId) {
+  if (event.touches.length !== 1) return;
+  touchStartX = event.touches[0].clientX;
+  touchStartY = event.touches[0].clientY;
+  currentSwipingCard = document.getElementById(`card-${clipId}`);
+}
+
+function handleTouchMove(event, clipId) {
+  if (!currentSwipingCard || event.touches.length !== 1) return;
+  const deltaX = event.touches[0].clientX - touchStartX;
+  const deltaY = event.touches[0].clientY - touchStartY;
+
+  // Ignore vertical scrolling
+  if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+
+  currentSwipingCard.classList.add('swiping');
+  currentSwipingCard.style.transform = `translateX(${deltaX}px) rotate(${deltaX * 0.04}deg)`;
+  currentSwipingCard.style.opacity = `${1 - Math.abs(deltaX) / 400}`;
+}
+
+function handleTouchEnd(event, clipId) {
+  if (!currentSwipingCard) return;
+  const touchEndX = event.changedTouches[0].clientX;
+  const deltaX = touchEndX - touchStartX;
+
+  currentSwipingCard.classList.remove('swiping');
+
+  // Swipe Threshold: 110px
+  if (deltaX > 110) {
+    // Swipe Right -> Approve
+    approveClip(clipId);
+  } else if (deltaX < -110) {
+    // Swipe Left -> Reject
+    rejectClip(clipId);
+  } else {
+    // Reset position
+    currentSwipingCard.style.transform = '';
+    currentSwipingCard.style.opacity = '';
+  }
+
+  currentSwipingCard = null;
+}
+
 // Account Filter Handler
 function filterAccount(accountId) {
   currentAccountFilter = accountId;
   
-  // Update Pill UI
   const pills = document.querySelectorAll('.pill-btn');
   pills.forEach(btn => {
     btn.classList.remove('active');
@@ -170,6 +360,8 @@ async function approveClip(clipId) {
     
     setTimeout(() => {
       currentClips = currentClips.filter(c => c.id !== clipId);
+      selectedClipIds.delete(clipId);
+      updateSelectedCounter();
       renderClips(currentClips);
     }, 350);
   } catch (error) {
@@ -194,6 +386,8 @@ async function rejectClip(clipId) {
 
     setTimeout(() => {
       currentClips = currentClips.filter(c => c.id !== clipId);
+      selectedClipIds.delete(clipId);
+      updateSelectedCounter();
       renderClips(currentClips);
     }, 350);
   } catch (error) {
@@ -203,7 +397,7 @@ async function rejectClip(clipId) {
   }
 }
 
-// Open Subtitle Quick Editor Modal
+// Open Subtitle Quick Inline Editor Modal (TSK-A04-05)
 function openModal(clipId) {
   const clip = currentClips.find(c => c.id === clipId);
   if (!clip) return;
@@ -260,6 +454,14 @@ function addSubtitleRow() {
     <button onclick="this.parentElement.remove()" class="text-gray-500 hover:text-red-400 p-1">&times;</button>
   `;
   subtitlesList.appendChild(div);
+}
+
+function formatSubtitlesUppercase() {
+  const inputs = document.querySelectorAll('#subtitlesList .sub-text');
+  inputs.forEach(input => {
+    input.value = input.value.toUpperCase();
+  });
+  showToast('Formatted all subtitles to UPPERCASE', 'info');
 }
 
 // Save Updated Subtitles via REST API

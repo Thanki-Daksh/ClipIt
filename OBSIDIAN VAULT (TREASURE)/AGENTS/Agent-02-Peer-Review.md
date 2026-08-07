@@ -12,5 +12,6 @@
 ---
 
 ### 📝 Audit Log Notes
-- **Agent 01 Hand-Off**: `VideoItem` objects produced by `modules/watcher.py` match schema requirements for `jobs` table enqueuing.
-- **Agent 03 Hand-Off**: `ViralClipCandidate` models in `modules/analyzer.py` output precise floats for `start_time` and `end_time` ready for FFmpeg clipping in `modules/clipper.py`.
+- **Agent 01 Hand-Off**: `VideoItem` objects produced by `modules/watcher.py` filter out live streams and YouTube shorts, preventing invalid jobs from enqueuing.
+- **Agent 03 Hand-Off**: `ViralClipCandidate` models in `modules/analyzer.py` output precise floats for `start_time` and `end_time` clamped to `video_duration`, with extracted quote text for subtitle burned clips in `modules/clipper.py`.
+- **Groq/Whisper Hand-Off**: Large audio files (> 25MB) are automatically sliced into ~600s chunks and timestamp-shifted without payload truncation.

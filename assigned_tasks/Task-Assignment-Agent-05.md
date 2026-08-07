@@ -22,3 +22,7 @@
 | **TSK-A05-02** | Integrate Termux CPU Wake-Lock | HIGH | [x] COMPLETED | termux-wake-lock on launch & release on shutdown (start.sh + stop.sh) |
 | **TSK-A05-03** | Build Battery & Thermal Safeguard | HIGH | [x] COMPLETED | scripts/termux_monitor.py pauses at <15% unplugged / >43°C |
 | **TSK-A05-04** | Build Termux Boot Recovery Script | MEDIUM | [x] COMPLETED | scripts/boot_recovery.sh auto-starts daemon on boot |
+| **TSK-A05-05** | Termux Wi-Fi Network Check | HIGH | [x] COMPLETED | scripts/termux_monitor.py pauses downloads on cellular/metered (require_wifi) |
+| **TSK-A05-06** | Disk Storage Threshold Guard | HIGH | [x] COMPLETED | scripts/termux_monitor.py pauses pipeline when free disk < 1 GB |
+| **TSK-A05-07** | Android Auto-Start Service | MEDIUM | [x] COMPLETED | boot_recovery.sh --install writes ~/.termux/boot/clipit_boot.sh |
+| **TSK-A05-08** | CPU Low-Power Governor Switch | MEDIUM | [x] COMPLETED | thermal ladder -> storage/logs/concurrency.json recommended_workers for main.py |

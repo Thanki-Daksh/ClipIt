@@ -13,6 +13,10 @@
 - [x] Build mobile dark-mode HTML template (`ui/templates/index.html`)
 - [x] Build 9:16 HTML5 video preview card & modal editor (`ui/static/js/app.js`)
 - [x] Implement 1-tap clip approval REST API (`/api/clips/{id}/approve`)
+- [x] Build Modal Subtitle Inline Editor with time-sync (`ui/templates/clip_modal.html`)
+- [x] Build Real-Time Pipeline Progress Bar telemetry widget (`ui/templates/index.html`)
+- [x] Implement Batch Approval & Rejection Actions (`/api/clips/batch_approve`)
+- [x] Add Mobile PWA Touch Swipe-to-Approve Gestures (`ui/static/js/app.js`)
 
 
 

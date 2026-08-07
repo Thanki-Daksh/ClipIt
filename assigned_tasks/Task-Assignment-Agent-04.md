@@ -22,3 +22,7 @@
 | **TSK-A04-02** | Build Mobile Dark Dashboard | CRITICAL | [x] COMPLETED | Responsive HTML5 layout with virality badges & account filter pills |
 | **TSK-A04-03** | Build 9:16 Video Player Cards | CRITICAL | [x] COMPLETED | HTML5 video preview container & quick subtitle editor modal |
 | **TSK-A04-04** | Implement 1-Tap Clip Approval | HIGH | [x] COMPLETED | Fast REST API call (/api/clips/{id}/approve) with optimistic UI removal |
+| **TSK-A04-05** | Modal Subtitle Inline Editor | HIGH | [x] COMPLETED | Enable editing subtitle text inside modal before 1-tap approve |
+| **TSK-A04-06** | Real-Time Pipeline Progress Bar | HIGH | [x] COMPLETED | Add visual progress indicator for active queue processing |
+| **TSK-A04-07** | Batch Approval Actions | MEDIUM | [x] COMPLETED | Support multi-select approve/reject with optimistic UI removal |
+| **TSK-A04-08** | Mobile PWA Touch Gestures | MEDIUM | [x] COMPLETED | Add swipe-to-approve touch gestures on mobile viewports |

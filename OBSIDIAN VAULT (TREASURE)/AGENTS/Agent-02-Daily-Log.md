@@ -13,7 +13,11 @@
 - Built `modules/downloader.py`: `yt-dlp` 1080p MP4 downloader & FFmpeg 16kHz mono `.wav` audio extraction pipeline.
 - Built `modules/transcriber.py`: Groq Whisper / OpenAI Whisper STT transcriber returning word-level timestamps (`verbose_json`) with automatic audio splitting for files > 25MB.
 - Built `modules/analyzer.py`: Gemini & OpenAI virality scoring and hook extraction engine returning structured Pydantic clip candidates.
-- Built `tests/test_ai_ingestion.py`: Unit test suite verifying XML parsing, timestamp models, and LLM JSON parsing (4/4 tests passing).
+- Implemented >25MB audio auto-chunking & timestamp offset recalculation in `modules/transcriber.py` (TSK-A02-05).
+- Implemented YouTube Shorts and Live stream filtering in `modules/watcher.py` & `modules/downloader.py` (TSK-A02-06).
+- Tuned Gemini Virality prompt, quote extraction, and timestamp bounds validation in `modules/analyzer.py` (TSK-A02-07).
+- Implemented exponential backoff retry client (`retry_with_backoff`) for API rate-limits and server errors (TSK-A02-08).
+- Expanded unit test suite in `tests/test_ai_ingestion.py` (7/7 pytest tests passing).
 
 
 

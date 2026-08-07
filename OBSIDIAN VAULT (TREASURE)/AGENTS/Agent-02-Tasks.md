@@ -13,6 +13,10 @@
 - [x] Build `yt-dlp` video downloader & audio extractor (`modules/downloader.py`)
 - [x] Build Groq Whisper API STT client (`modules/transcriber.py`)
 - [x] Construct Gemini 1.5 Flash virality prompt engine (`modules/analyzer.py`)
+- [x] Whisper >25MB Audio Splitter (`modules/transcriber.py`)
+- [x] YouTube Live/Shorts Filter (`modules/watcher.py` & `modules/downloader.py`)
+- [x] Gemini Virality Prompt Tuning & Quote Extraction (`modules/analyzer.py`)
+- [x] Exponential Backoff Client (`modules/transcriber.py` & `modules/analyzer.py`)
 
 
 

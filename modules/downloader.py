@@ -1,8 +1,8 @@
 """
 modules/downloader.py - yt-dlp Video Downloader & FFmpeg Audio Extractor for ClipIt.
 
-Fetches up to 1080p MP4 video via yt-dlp and extracts 16kHz mono PCM WAV audio
-for speech-to-text transcription.
+Fetches up to 1080p MP4 video via yt-dlp, extracts 16kHz mono PCM WAV audio,
+and enforces YouTube Shorts / Live stream filtering.
 """
 
 import os
@@ -22,13 +22,19 @@ class DownloadResult(BaseModel):
     thumbnail_url: Optional[str] = None
     description: Optional[str] = None
     uploader: Optional[str] = None
+    is_short: bool = False
+    is_live: bool = False
+    width: Optional[int] = None
+    height: Optional[int] = None
 
 
 class MediaDownloader:
-    """yt-dlp Video Downloader and FFmpeg 16kHz Mono Audio Extractor."""
+    """yt-dlp Video Downloader and FFmpeg 16kHz Mono Audio Extractor with filtering."""
 
-    def __init__(self, output_dir: str = "storage/downloads"):
+    def __init__(self, output_dir: str = "storage/downloads", filter_shorts: bool = True, filter_live: bool = True):
         self.output_dir = os.path.abspath(output_dir)
+        self.filter_shorts = filter_shorts
+        self.filter_live = filter_live
         os.makedirs(self.output_dir, exist_ok=True)
 
     def extract_audio_wav(self, input_video_path: str, output_audio_path: str) -> bool:
@@ -54,7 +60,7 @@ class MediaDownloader:
             return False
 
     def download(self, video_url_or_path: str, video_id_override: Optional[str] = None) -> DownloadResult:
-        """Download video and extract 16kHz mono WAV audio."""
+        """Download video and extract 16kHz mono WAV audio, applying Shorts/Live validation."""
         # Handle local video file case
         if os.path.exists(video_url_or_path) or video_url_or_path.startswith("file://"):
             local_path = video_url_or_path.replace("file:///", "").replace("file://", "")
@@ -62,10 +68,23 @@ class MediaDownloader:
 
         # Download from YouTube / Web URL via yt-dlp
         vid_id = video_id_override or "video"
+
+        # Pre-extract info to validate live status & duration prior to downloading full video stream
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "nocheckcertificate": True}) as ydl:
+            pre_info = ydl.extract_info(video_url_or_path, download=False)
+            if pre_info:
+                duration = float(pre_info.get("duration") or 0.0)
+                is_live = bool(pre_info.get("is_live") or pre_info.get("was_live"))
+                is_short = duration > 0 and duration < 60
+
+                if self.filter_live and is_live:
+                    raise ValueError(f"Skipping live stream video '{pre_info.get('title')}' ({video_url_or_path})")
+                if self.filter_shorts and is_short:
+                    raise ValueError(f"Skipping short-form video (< 60s) '{pre_info.get('title')}' ({video_url_or_path})")
+
         video_filename_template = os.path.join(self.output_dir, f"{vid_id}_%(id)s.%(ext)s")
 
         ydl_opts = {
-            # Format selection: best video <= 1080p + best audio, combined into mp4
             "format": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
             "outtmpl": video_filename_template,
             "merge_output_format": "mp4",
@@ -85,16 +104,18 @@ class MediaDownloader:
             thumbnail = info.get("thumbnail")
             description = info.get("description")
             uploader = info.get("uploader")
+            width = info.get("width")
+            height = info.get("height")
+            is_live = bool(info.get("is_live") or info.get("was_live"))
+            is_short = duration > 0 and duration < 60
 
             # Determine downloaded video path
             downloaded_video_path = ydl.prepare_filename(info)
-            # Handle format merge extension change if needed
             base, _ = os.path.splitext(downloaded_video_path)
             if os.path.exists(f"{base}.mp4"):
                 downloaded_video_path = f"{base}.mp4"
 
             if not os.path.exists(downloaded_video_path):
-                # Search directory for file starting with target id
                 possible_files = [f for f in os.listdir(self.output_dir) if actual_id in f]
                 if possible_files:
                     downloaded_video_path = os.path.join(self.output_dir, possible_files[0])
@@ -116,7 +137,11 @@ class MediaDownloader:
                 audio_path=audio_path,
                 thumbnail_url=thumbnail,
                 description=description,
-                uploader=uploader
+                uploader=uploader,
+                is_short=is_short,
+                is_live=is_live,
+                width=width,
+                height=height
             )
 
     def _process_local_file(self, local_path: str, video_id_override: Optional[str] = None) -> DownloadResult:
@@ -128,8 +153,8 @@ class MediaDownloader:
         file_basename = os.path.basename(local_path)
         title = os.path.splitext(file_basename)[0]
 
-        # Probe duration via FFprobe
         duration = self._probe_duration(local_path)
+        is_short = duration > 0 and duration < 60
 
         audio_filename = f"{vid_id}_audio.wav"
         audio_path = os.path.join(self.output_dir, audio_filename)
@@ -147,7 +172,9 @@ class MediaDownloader:
             audio_path=audio_path,
             thumbnail_url=None,
             description="Local input video",
-            uploader="Local File"
+            uploader="Local File",
+            is_short=is_short,
+            is_live=False
         )
 
     def _probe_duration(self, file_path: str) -> float:

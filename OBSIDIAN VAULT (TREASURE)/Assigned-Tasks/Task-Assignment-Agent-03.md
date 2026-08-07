@@ -22,3 +22,7 @@
 | **TSK-A03-02** | Build ASS Subtitle Generator | CRITICAL | [ ] PENDING | Encode ASS subtitle header & word-by-word active BGR highlight colors |
 | **TSK-A03-03** | Build Subtitle Burn-In Pipeline | HIGH | [ ] PENDING | Run FFmpeg subtitle burn-in filter without audio sync drift |
 | **TSK-A03-04** | Build Metadata Package Compiler | MEDIUM | [ ] PENDING | Write metadata.json alongside output .mp4 clip in account storage |
+| **TSK-A03-05** | 3 ASS Subtitle Style Presets | HIGH | [ ] PENDING | Add VIRAL_YELLOW, MINIMAL_WHITE, NEON_CYAN presets |
+| **TSK-A03-06** | Dual-Pass Render Engine | HIGH | [ ] PENDING | Implement h264_nvenc with fallback to libx264 |
+| **TSK-A03-07** | Speaker Face Auto-Crop Math | HIGH | [ ] PENDING | Calculate dynamic bounding box for vertical center cropping |
+| **TSK-A03-08** | Audio Loudness Normalizer | MEDIUM | [ ] PENDING | Apply FFmpeg loudnorm filter for broadcast audio standards |

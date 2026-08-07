@@ -14,11 +14,11 @@
 - ⚖️ Logged architectural decision records [[Decisions#ADR-001|ADR-001]] & [[Decisions#ADR-002|ADR-002]].
 - 📋 Formatted master task backlog board in [[Tasks]].
 - 🤖 **Agent 02 (AI & Ingestion Specialist)**: Implemented all core ingestion and AI analysis modules:
-  - `modules/watcher.py`: YouTube RSS XML feed parser and local watch directory observer.
-  - `modules/downloader.py`: `yt-dlp` 1080p MP4 fetcher & FFmpeg 16kHz mono `.wav` audio extraction wrapper.
-  - `modules/transcriber.py`: Groq/OpenAI Whisper STT API transcriber returning word-level timestamps (`verbose_json`) with auto-chunking for files > 25MB.
-  - `modules/analyzer.py`: Gemini & OpenAI LLM virality scoring engine and hook extractor returning structured Pydantic clip candidates.
-  - `tests/test_ai_ingestion.py`: Unit test suite covering all ingestion modules (4/4 tests passing).
+  - `modules/watcher.py`: YouTube RSS XML feed parser, local watch directory observer, and YouTube Shorts/Live stream filtering.
+  - `modules/downloader.py`: `yt-dlp` 1080p MP4 fetcher, Shorts/Live validation, & FFmpeg 16kHz mono `.wav` audio extraction wrapper.
+  - `modules/transcriber.py`: Groq/OpenAI Whisper STT API transcriber returning word-level timestamps (`verbose_json`), auto-chunking for files > 25MB, & exponential backoff retry client.
+  - `modules/analyzer.py`: Gemini & OpenAI LLM virality scoring engine, prompt tuning, quote extraction, timestamp bounds validation, & exponential backoff client.
+  - `tests/test_ai_ingestion.py`: Comprehensive test suite (7/7 tests passing under pytest).
 
 ---
 
