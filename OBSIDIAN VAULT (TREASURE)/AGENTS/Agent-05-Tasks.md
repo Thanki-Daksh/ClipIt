@@ -17,6 +17,8 @@
 - [x] Build 1 GB disk storage hold (pause pipeline below 1 GB free)
 - [x] Build Termux-Boot auto-start service (`boot_recovery.sh --install`)
 - [x] Build CPU low-power governor switch (thermal -> concurrency.json)
+- [x] Build YouTube Shorts auto-poster (`modules/publisher_yt.py`, Data API v3 resumable upload)
+- [x] Build Instagram Reels auto-publisher (`modules/publisher_ig.py`, Graph API two-phase publish)
 
 
 

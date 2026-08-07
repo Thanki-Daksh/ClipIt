@@ -26,3 +26,5 @@
 | **TSK-A05-06** | Disk Storage Threshold Guard | HIGH | [x] COMPLETED | scripts/termux_monitor.py pauses pipeline when free disk < 1 GB |
 | **TSK-A05-07** | Android Auto-Start Service | MEDIUM | [x] COMPLETED | boot_recovery.sh --install writes ~/.termux/boot/clipit_boot.sh |
 | **TSK-A05-08** | CPU Low-Power Governor Switch | MEDIUM | [x] COMPLETED | thermal ladder -> storage/logs/concurrency.json recommended_workers for main.py |
+| **TSK-A05-09** | YouTube Shorts Auto-Poster Module | CRITICAL | [x] COMPLETED | modules/publisher_yt.py — YouTube Data API v3 resumable upload |
+| **TSK-A05-10** | Instagram Reels Auto-Publisher Module | CRITICAL | [x] COMPLETED | modules/publisher_ig.py — Instagram Graph API two-phase Reels publish |
