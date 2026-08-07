@@ -106,13 +106,30 @@ class VideoClipper:
     # ------------------------------------------------------------------ #
     @staticmethod
     def _detect_nvenc(ffmpeg: str = "ffmpeg") -> bool:
-        """Return True if the FFmpeg build exposes the h264_nvenc encoder."""
+        """
+        Return True if FFmpeg can actually USE the h264_nvenc encoder.
+
+        Merely being present in `ffmpeg -encoders` is not enough - the NVIDIA
+        driver runtime (nvcuda.dll) may be missing on the host. We probe by
+        attempting a tiny 1-frame h264_nvenc encode; if the driver cannot be
+        loaded this fails fast and we correctly fall back to libx264.
+        """
         try:
-            out = subprocess.run(
+            enc_out = subprocess.run(
                 [ffmpeg, "-hide_banner", "-encoders"],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            ).stdout.decode("utf-8", errors="replace")
-            return any("h264_nvenc" in line for line in out.splitlines())
+            )
+            if not any(b"h264_nvenc" in line for line in enc_out.stdout.splitlines()):
+                return False
+            # Functional probe: 60x40, 1 frame, null muxer.
+            probe = subprocess.run(
+                [ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+                 "-f", "lavfi", "-i", "color=c=black:s=60x40:d=0.03",
+                 "-frames:v", "1", "-c:v", "h264_nvenc", "-f", "null", "-"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=20,
+            )
+            return probe.returncode == 0
         except Exception:
             return False
 
@@ -169,7 +186,8 @@ class VideoClipper:
         crop_window = None
         if face_bbox is not None:
             crop_mode = "center"
-            crop_window = self.face_crop_window(face_bbox, TARGET_WIDTH, TARGET_HEIGHT)
+            src_w, src_h, _ = self._probe_dimensions(raw_video)
+            crop_window = self.face_crop_window(face_bbox, src_w, src_h)
 
         audio_filter = None
         if audio_loudnorm:
@@ -313,9 +331,9 @@ class VideoClipper:
         duration = end - start
 
         if crop_mode == "blur":
-            vf, out_mapping = self._blur_filter(crop_window)
+            vf, out_mapping, is_complex = self._blur_filter(crop_window)
         else:
-            vf, out_mapping = self._center_filter(crop_window)
+            vf, out_mapping, is_complex = self._center_filter(crop_window)
 
         codec_args = self._codec_args(
             encoder=encoder, preset=preset, crf=crf, quality=quality
@@ -332,13 +350,16 @@ class VideoClipper:
             "-ss", f"{start:.3f}",
             "-i", raw_video,
             "-to", f"{duration:.3f}",
-            "-vf", vf,
         ]
+        if is_complex:
+            cmd += ["-filter_complex", vf]
+        else:
+            cmd += ["-vf", vf]
         cmd += out_mapping
         cmd += list(codec_args)
         cmd += audio_args
         cmd += ["-pix_fmt", "yuv420p", "-avoid_negative_ts", "make_zero"]
-        cmd += ["-t", f"{duration:.3f}", output_path]
+        cmd += [output_path]
         return cmd
 
     def _center_filter(self, crop_window: Optional[CropWindow]):
@@ -350,28 +371,21 @@ class VideoClipper:
             )
         else:
             vf = f"crop=ih*({TARGET_AR:.6f}):ih,scale={TARGET_WIDTH}:{TARGET_HEIGHT}"
-        return vf, ["-map", "0:a?"]
+        # No explicit video -map: default mapping keeps the filtered video
+        # plus all audio. (Do NOT add `-map 0:a?` here - it would drop video.)
+        return vf, [], False
 
     def _blur_filter(self, crop_window: Optional[CropWindow]):
         """Stacked blurred background with sharp foreground overlay centered."""
-        fg_off = 0 if crop_window is None else (crop_window.x - (
-            TARGET_WIDTH - TARGET_WIDTH // 2
-        ))
-        # For blurred mode we keep the fg centered unless a face window shifts x.
-        if crop_window is not None:
-            overlay_x = (TARGET_WIDTH - TARGET_WIDTH) // 2 + crop_window.x // 2
-        else:
-            overlay_x = "(main_w-overlay_w)/2"
-
         filter_complex = (
             "[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
             "boxblur=25:5,crop={w}:{h}[bg];"
             "[0:v]scale=1080:-1[fg];"
-            "[bg][fg]overlay={ox}:(main_h-overlay_h)/2[v]"
-        ).format(w=TARGET_WIDTH, h=TARGET_HEIGHT, ox=overlay_x)
-        return filter_complex, ["-map", "[v]", "-map", "0:a?"]
+            "[bg][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2[v]"
+        ).format(w=TARGET_WIDTH, h=TARGET_HEIGHT)
+        return filter_complex, ["-map", "[v]", "-map", "0:a?"], True
 
-    def _encode_args(
+    def _codec_args(
         self,
         encoder: str,
         preset: str,
@@ -418,6 +432,10 @@ class VideoClipper:
                 f"Insufficient free disk space: {free / (1024*1024):.0f}MB available, "
                 f"needs >= {MIN_FREE_MB}MB."
             )
+
+    def _probe_dimensions(self, video_path: str) -> Tuple[int, int, float]:
+        """Alias for _probe: probe stream dimensions + duration."""
+        return self._probe(video_path)
 
     def _run(self, cmd: List[str]) -> str:
         """Execute FFmpeg non-blocking; surface stderr on failure."""

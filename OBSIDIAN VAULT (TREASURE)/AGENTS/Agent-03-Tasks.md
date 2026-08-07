@@ -13,6 +13,10 @@
 - [x] Build ASS animated subtitle generator (`modules/captioner.py`) — VERIFIED word-highlight tags
 - [x] Implement subtitle burn-in FFmpeg filter — VERIFIED `-c:a copy` zero-drift
 - [x] Build metadata compiler (`modules/metadata.py`) — VERIFIED metadata.json beside .mp4
+- [x] Add 3 ASS style presets (VIRAL_YELLOW / MINIMAL_WHITE / NEON_CYAN) — VERIFIED
+- [x] Dual-pass render engine (h264_nvenc + libx264 fallback) — VERIFIED functional probe
+- [x] Speaker face auto-crop math — VERIFIED face-centered 9:16 window
+- [x] Audio loudness normalizer (loudnorm) — VERIFIED -16.0 LUFS output
 
 
 

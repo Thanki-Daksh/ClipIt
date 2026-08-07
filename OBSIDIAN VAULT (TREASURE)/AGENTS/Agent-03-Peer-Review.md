@@ -26,6 +26,10 @@
 | `modules/captioner.py` ASS gen | 🟢 `&H0000FFFF&` tags | ASS header + inline `\c&H0000FFFF&` |
 | `modules/captioner.py` burn-in | 🟢 visible | bottom-frame MD5 differs captioned vs raw |
 | `modules/metadata.py` package | 🟢 metadata.json | written beside clip in `storage/accounts/acc_01/outputs/` |
+| `modules/captioner.py` ASS_PRESETS | 🟢 3 styles | VIRAL_YELLOW/MINIMAL_WHITE/NEON_CYAN emit spec-exact `\c&HBBGGRR&` highlight |
+| `modules/clipper.py` dual-pass | 🟢 auto fallback | functional nvenc probe=True on GPU host, false here -> libx264 (16/16, full `pytest` 78 passed) |
+| `modules/clipper.py` face crop | 🟢 centered | `face_crop_window` centers 9:16 window on face x=900 -> crop x=596, clamps edge |
+| `modules/clipper.py` loudnorm | 🟢 -16.0 LUFS | ebur128 I of output = -16.0 vs source -21.8 |
 
 
 

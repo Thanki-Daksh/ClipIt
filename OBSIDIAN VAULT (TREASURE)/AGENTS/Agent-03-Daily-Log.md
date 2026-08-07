@@ -15,6 +15,11 @@
 - **BUILT `modules/captioner.py`** — `ASSSubtitleGenerator.generate_ass()` writes v4.00+ header with Montserrat ExtraBold + word-by-word active BGR highlight (`{\c&H0000FFFF&}`). `SubtitleRenderer.burn_subtitles()` burns via FFmpeg `subtitles=` filter with `-c:a copy` (zero audio drift). Fix: cd into subtitle dir + basename to dodge Windows drive-colon filter-arg issue.
 - **BUILT `modules/metadata.py`** — `MetadataCompiler.compile()` merges title/description/hashtags/CTA/hook into metadata.json beside the final .mp4 in `storage/accounts/{account_id}/outputs/`.
 - **TESTS**: `python test/verify_agent03.py` => **7/7 PASS** (both crop modes render exactly 1080x1920; ASS highlight tags present; burn-in renders 1080x1920 with audible-audio copied; metadata.json hashtag normalization verified; rejects <5s clip and empty words). Burn-in confirmed via differing bottom-frame MD5 between captioned vs raw clip. Existing suite `pytest tests/` => **35 passed**.
+- **TSK-A03-05 PRESETS**: Added `ASS_PRESETS` (VIRAL_YELLOW, MINIMAL_WHITE, NEON_CYAN) to `modules/captioner.py`. `ASSSubtitleGenerator(preset=...)` now resolves palette (primary/highlight/outline/back/font/size); header emits spec-exact `{\c&HBBGGRR&}` inline highlight.
+- **TSK-A03-06 DUAL-PASS**: `VideoClipper.cut_clip(encoder="auto")` now offers h264_nvenc first then automatic libx264 fallback. `_detect_nvenc()` performs a **functional** 1-frame nvenc encode probe (not just encoder listing) so a missing `nvcuda.dll` correctly resolves to libx264 instead of hanging. Fixed `-map 0:a?` dropping video; blur uses `-filter_complex`.
+- **TSK-A03-07 FACE CROP]: `VideoClipper.face_crop_window(bbox, src_w, src_h)` computes the largest 9:16 window centered on the face with even-safe dims, clamped to source bounds; wired into `cut_clip(face_bbox=...)` which probes source dims first. Verified window centers exactly on face x; left-edge clamp works.
+- **TSK-A03-08 LOUDNORM**: `cut_clip(audio_loudnorm=True)` applies `loudnorm=I=-16:TP=-1.5:LRA=11`. Verified source -21.8 LUFS -> **-16.0 LUFS** output (re-encodes AAC).
+- **VERIFICATION v2**: `test/verify_agent03_v2.py` => **16/16 PASS**. `pytest tests/` => **78 passed** (full suite; Agent 06's new clipper/pipeline/e2e/healt/media_qa/queue tests included).
 
 
 
