@@ -26,3 +26,5 @@
 | **TSK-A03-06** | Dual-Pass Render Engine | HIGH | [x] COMPLETED | h264_nvenc w/ functional driver probe + automatic libx264 fallback |
 | **TSK-A03-07** | Speaker Face Auto-Crop Math | HIGH | [x] COMPLETED | Dynamic 9:16 window centered on face bbox, clamped + even-safe |
 | **TSK-A03-08** | Audio Loudness Normalizer | MEDIUM | [x] COMPLETED | FFmpeg loudnorm I=-16 TP=-1.5 LRA=11 verified -16.0 LUFS |
+| **TSK-A03-09** | Real FFmpeg 9:16 Crop & ASS Subtitle Burn-In | CRITICAL | [x] COMPLETED | `test/e2e_agent03.py` renders real 1080x1920 MP4 + burns word-highlight ASS; caption strip pixel-diff verified |
+| **TSK-A03-10** | Shorts & Reels Metadata & Hash Packaging | HIGH | [x] COMPLETED | `format_for_platform`/`compile_package` emit post_shorts.json + post_reels.json w/ title caps & #-normalized tags |
