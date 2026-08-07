@@ -17,6 +17,8 @@
 - [x] Dual-pass render engine (h264_nvenc + libx264 fallback) — VERIFIED functional probe
 - [x] Speaker face auto-crop math — VERIFIED face-centered 9:16 window
 - [x] Audio loudness normalizer (loudnorm) — VERIFIED -16.0 LUFS output
+- [x] Real FFmpeg 9:16 crop + ASS subtitle burn-in — VERIFIED `test/e2e_agent03.py` ALL CHECKS PASSED
+- [x] Shorts & Reels metadata + hashtag packaging — VERIFIED post_shorts.json + post_reels.json
 
 
 

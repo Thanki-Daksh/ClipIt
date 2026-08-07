@@ -20,6 +20,8 @@
 - **TSK-A03-07 FACE CROP]: `VideoClipper.face_crop_window(bbox, src_w, src_h)` computes the largest 9:16 window centered on the face with even-safe dims, clamped to source bounds; wired into `cut_clip(face_bbox=...)` which probes source dims first. Verified window centers exactly on face x; left-edge clamp works.
 - **TSK-A03-08 LOUDNORM**: `cut_clip(audio_loudnorm=True)` applies `loudnorm=I=-16:TP=-1.5:LRA=11`. Verified source -21.8 LUFS -> **-16.0 LUFS** output (re-encodes AAC).
 - **VERIFICATION v2**: `test/verify_agent03_v2.py` => **16/16 PASS**. `pytest tests/` => **78 passed** (full suite; Agent 06's new clipper/pipeline/e2e/healt/media_qa/queue tests included).
+- **TSK-A03-09 REAL CROP+BURN E2E**: Added `test/e2e_agent03.py` — produces a REAL 1080x1920 vertical MP4 from a 1920x1080 source: `VideoClipper.cut_clip` (center+libx264+loudnorm) -> `ASSSubtitleGenerator` (VIRAL_YELLOW) -> `SubtitleRenderer.burn_subtitles` (-c:a copy) -> `MetadataCompiler.compile_package`. ALL CHECKS PASSED; caption strip pixel-diff = 292,946/324,000 changed pixels (word highlight truly burned). Full pytest run: **73/78** (5 new failures are all in Agent 06's UNCOMMITTED test files: test_auto_publisher, test_live_pipeline, test_oauth_credentials, test_persistence, test_security — not my modules).
+- **TSK-A03-10 SHORTS/REELS PACKAGING**: Extended `modules/metadata.py` with `PLATFORM_LIMITS`, `format_for_platform()` and `compile_package()`. Writes `post_shorts.json` (forces #shorts, 100-char title cap) and `post_reels.json` (title-led caption body, 2,200-char cap). Both verified via `test/e2e_agent03.py` => metadata.json + post_shorts.json + post_reels.json produced in `storage/accounts/acc_media01/outputs/`.
 
 
 
