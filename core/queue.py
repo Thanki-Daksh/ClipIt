@@ -232,6 +232,7 @@ class QueueEngine:
         """
         jobs = self.db.list_jobs()
         requeued: list[str] = []
+        entries: list[tuple] = []  # (level, message, job_id, account_id)
         with self.db.transaction() as conn:
             for job in jobs:
                 if job["status"] not in WORKING_STAGES:
@@ -248,8 +249,11 @@ class QueueEngine:
                         (job["id"],),
                     )
                 requeued.append(job["id"])
-                self.db.log_event("WARNING", f"crash re-queue: {job['status']} -> PENDING",
-                                  job_id=job["id"], account_id=job["account_id"])
+                entries.append(("WARNING", f"crash re-queue: {job['status']} -> PENDING",
+                                job["id"], job["account_id"]))
+        # Log this outside the write transaction (log_event opens its own tx).
+        for level, message, jid, acc_id in entries:
+            self.db.log_event(level, message, job_id=jid, account_id=acc_id)
         if requeued:
             log.warning("requeued %s stuck job(s) to PENDING: %s", len(requeued), requeued)
         return requeued

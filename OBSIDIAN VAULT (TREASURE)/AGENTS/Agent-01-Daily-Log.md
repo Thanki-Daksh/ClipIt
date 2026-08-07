@@ -26,6 +26,13 @@
 - Journal mode = `wal`, foreign keys = `1`.
 - CLI: init, add-account (by name/id), add-url, list all exit 0.
 
+### ✅ Pipeline Wiring & E2E (2026-08-07)
+- **TSK-A01-06** `core/workers.py`: adapters bridge real Agent 02/03 module classes (`MediaDownloader`, `WhisperTranscriber`, `ViralityAnalyzer`, `VideoClipper`, `ASSSubtitleGenerator`, `SubtitleRenderer`, `MetadataCompiler`) into `register_handler()`; `main.py --daemon` now calls `register_workers(cfg, db)` and all 6 stages wire in automatically. Verified live: job PENDING→DOWNLOADING, downloader failed gracefully → retry ladder to PENDING (retry_count=1).
+- **TSK-A01-07** `core/storage.py`: `AccountStorage` enforces `storage/{account_id}/{raw,audio,clips,ass,outputs}` isolation with path-traversal guard; all worker handlers write through it.
+- **TSK-A01-08** `QueueEngine.requeue_stuck()`: crash re-queue resets any mid-stage working job to PENDING (optional `clear_error`); fixed a nested-transaction deadlock (`threading.Lock` non-reentrant) by deferring `log_event` outside the write tx.
+- **TSK-A01-09** `core/health.py` + `main.py serve`: FastAPI `GET /health` returns DB (journal, FKs, schema version, size), queue `by_status`, disk free%, and per-account storage usage. Verified over live HTTP on port 8899.
+- **Tests**: added `tests/test_storage.py`, `tests/test_requeue.py`, `tests/test_health.py`, `tests/test_workers.py`. Full suite: **78 passed** in ~20s.
+
 
 
 ### ⚙️ Recommended Model & Effort Configuration

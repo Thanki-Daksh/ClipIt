@@ -118,8 +118,13 @@ class AccountStorage:
         return [d.name for d in self.root.iterdir() if d.is_dir()]
 
     def wipe_account(self, account_id: str) -> bool:
-        """Remove an account's storage tree (idempotent). Returns True if removed."""
-        acc = self._account_path(account_id)
+        """Remove an account's storage tree (idempotent). Returns True if removed.
+        Does NOT re-create the directory; an absent dir returns False."""
+        if not account_id or "/" in account_id or "\\" in account_id or ".." in account_id:
+            raise StorageError(f"unsafe account id: {account_id!r}")
+        acc = (self.root / account_id).resolve()
+        if not str(acc).startswith(str(self.root)):
+            raise StorageError(f"account path escapes storage root: {account_id!r}")
         if acc.exists():
             shutil.rmtree(acc)
             log.info("wiped storage for account %s", account_id)

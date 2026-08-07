@@ -14,6 +14,10 @@
 - [x] Implement `core/queue.py` state machine manager
 - [x] Build crash recovery auto-resume mechanism
 - [x] Build round-robin scheduler across N accounts
+- [x] Connect QueueEngine to main.py --daemon auto-pipeline loop
+- [x] Enforce storage/{account_id}/raw and /clips directory segregation
+- [x] Implement Crash Re-Queue Engine for stuck mid-stage jobs
+- [x] Implement System Healthcheck REST API (`GET /health` in `core/health.py`)
 
 
 

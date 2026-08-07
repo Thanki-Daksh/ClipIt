@@ -8,8 +8,8 @@ and Agent 03 (clipper, captioner, metadata).
 Storage isolation: every handler writes through :class:`AccountStorage` so raw
 video, audio, clips, captions and outputs stay inside ``storage/{account_id}/``.
 
-Handlers capture all worker exceptions and surface them as ``(False, error)``
-so the queue engine applies its retry ladder instead of crashing the daemon.
+Handlers never raise: worker exceptions are caught and returned as an
+``(False, error)`` tuple so the queue engine applies retry -> fail semantics.
 """
 
 from __future__ import annotations
@@ -32,46 +32,45 @@ Handler = Callable[[Any, Database], tuple[bool, Any]]
 
 
 def _import(module_name: str, member: str):
-    """Import ``from module_name import member``; return None on any failure."""
+    """Return a worker class from a module, or None if unavailable."""
     try:
         module = __import__(module_name, fromlist=[member])
         return getattr(module, member)
     except Exception as exc:
-        log.info("worker %s.%s unavailable: %s", module_name, member, exc)
+        log.info("worker %s.%s not loadable: %s", module_name, member, exc)
         return None
 
 
-def _word_dicts_from_transcript(transcript_json: str, start: float, end: float) -> list[dict]:
-    """Flatten transcript word timestamps that overlap a clip window."""
+def _words_in_window(transcript_json: str, start: float, end: float) -> list[dict]:
+    """Flatten word timestamps from a transcript that fall inside a clip window."""
     if not transcript_json:
         return []
     try:
         data = json.loads(transcript_json)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, TypeError):
         return []
-    out = []
+    out: list[dict] = []
     for w in data.get("words", []):
         ws, we = float(w.get("start", 0.0)), float(w.get("end", w.get("start", 0.0)))
         if ws >= start and we <= end:
-            out.append({"word": w.get("word", w.get("text", "")),
-                        "start": ws, "end": we})
+            out.append({"word": w.get("word", w.get("text", "")), "start": ws, "end": we})
     return out
 
 
 # ---------------------------------------------------------------------------
-# Stage handlers
+# Stage handler factories
 # ---------------------------------------------------------------------------
 
-def _download_handler(cfg: Config, store: AccountStorage, MediaDownloader) -> Handler:
+def _make_downloader(cfg: Config, store: AccountStorage, MediaDownloader) -> Handler:
     def handler(job, db):
         try:
             dl = MediaDownloader(output_dir=str(store.raw_dir(job["account_id"])))
             result = dl.download(job["source_url"])
-            raw = Path(result.video_path).name
-            audio = Path(result.audio_path).name
+            raw_name = Path(result.video_path).name
+            audio_name = Path(result.audio_path).name
             return True, {
-                "raw_video_path": str(store.raw_dir(job["account_id"]) / raw),
-                "audio_path": str(store.audio_dir(job["account_id"]) / audio),
+                "raw_video_path": str(store.raw_dir(job["account_id"]) / raw_name),
+                "audio_path": str(store.audio_dir(job["account_id"]) / audio_name),
                 "duration_seconds": float(result.duration),
                 "title": result.title,
             }
@@ -80,13 +79,13 @@ def _download_handler(cfg: Config, store: AccountStorage, MediaDownloader) -> Ha
     return handler
 
 
-def _transcribe_handler(cfg: Config, store: AccountStorage, WhisperTranscriber, tr_key) -> Handler:
-    def handler(job, db):
+def _make_transcriber(cfg: Config, store: AccountStorage, WhisperTranscriber) -> Handler:
+    def handler(job, row):
         try:
             audio = job["audio_path"]
             if not audio or not Path(audio).exists():
-                return False, f"transcriber: audio_path not found on disk ({audio})"
-            tr = WhisperTranscriber(api_key=db_key, provider="groq")
+                return False, f"transcriber: audio_path not found ({audio})"
+            tr = WhisperTranscriber(api_key=cfg.require_key("groq"), provider="groq")
             result = tr.transcribe(audio)
             return True, {"transcript_json": result.model_dump_json()}
         except Exception as exc:
@@ -94,8 +93,7 @@ def _transcribe_handler(cfg: Config, store: AccountStorage, WhisperTranscriber, 
     return handler
 
 
-def _analyze_handler(cfg: Config, store: AccountStorage, ViralityAnalyzer,
-                     transcript: Callable) -> Handler:
+def _make_analyzer(cfg: Config, store: AccountStorage, ViralityAnalyzer) -> Handler:
     def handler(job, db):
         try:
             if not job["transcript_json"]:
@@ -108,7 +106,7 @@ def _analyze_handler(cfg: Config, store: AccountStorage, ViralityAnalyzer,
                 video_duration=float(job["duration_seconds"] or 0.0),
                 transcript_segments=segments,
             )
-            # Persist candidate clips into the clips table for the clipper stage.
+            # Persist candidate clips; the clipper will render them.
             for c in result.clips:
                 db.create_clip(
                     job_id=job["id"], account_id=job["account_id"],
@@ -123,62 +121,66 @@ def _analyze_handler(cfg: Config, store: AccountStorage, ViralityAnalyzer,
     return handler
 
 
-def _clip_handler(cfg: Config, store: AccountStorage, VideoClipper) -> Handler:
+def _make_clipper(cfg: Config, store: AccountStorage, VideoClipper) -> Handler:
     def handler(job, db):
         try:
             raw = job["raw_video_path"]
             if not raw or not Path(raw).exists():
                 return False, f"clipper: raw_video_path not found ({raw})"
             clipper = VideoClipper()
-            clips = db.list_clips(job["id"])
-            for clip in clips:
+            for clip in db.list_clips(job["id"]):
                 out = str(store.clip_path(job["account_id"], clip["id"]))
-                clipper.cut_clip(raw_video=raw, start_time=float(clip["start_time"]),
-                                 end_time=float(clip["end_time"]), output_path=out)
+                clipper.cut_clip(
+                    raw_video=raw,
+                    start_time=float(clip["start_time"]),
+                    end_time=float(clip["end_time"]),
+                    output_path=out,
+                )
                 db.update_clip(clip["id"], video_path=out)
-            return {}
+            return True, {}
         except Exception as exc:
             return False, f"clipper: {type(exc).__name__}: {exc}"
     return handler
 
 
-def _caption_handler(cfg: Config, store: AccountStorage, ASSGen, SubtitleRenderer) -> Handler:
+def _make_captioner(cfg: Config, store: AccountStorage, ASSSubtitleGenerator,
+                    SubtitleRenderer) -> Handler:
     def handler(job, db):
         try:
-            clips = db.list_clips(job["id"])
             gen = ASSSubtitleGenerator()
             renderer = SubtitleRenderer()
-            for clip in clips:
+            for clip in db.list_clips(job["id"]):
                 if not clip["video_path"]:
                     continue
-                words = _word_dict_from_clip(job["transcript_json"] or "",
-                                             float(clip["start_time"]), float(clip["end_time"]))
+                words = _words_in_window(job["transcript_json"] or "",
+                                         float(clip["start_time"]), float(clip["end_time"]))
                 ass = str(store.ass_path(job["account_id"], clip["id"]))
                 gen.generate_ass(words=words, output_ass_path=ass)
                 final = str(store.clip_path(job["account_id"], clip["id"]).with_suffix(".captioned.mp4"))
                 renderer.burn_subtitles(video_path=clip["video_path"], ass_path=ass,
                                         output_path=final)
                 db.update_clip(clip["id"], caption_path=ass, video_path=final)
-            return {}
+            return True, {}
         except Exception as exc:
             return False, f"captioner: {type(exc).__name__}: {exc}"
     return handler
 
 
-def _metadata_handler(cfg: Config, store: AccountStorage, MetadataCompiler) -> Handler:
+def _make_metadata(cfg: Config, store: AccountStorage, MetadataCompiler) -> Handler:
     def handler(job, db):
         try:
             compiler = MetadataCompiler(storage_root=str(store.root))
             for clip in db.list_clips(job["id"]):
                 if not clip["video_path"]:
                     continue
+                hashtags = [h for h in (clip["hashtags"] or "").split() if h]
                 compiler.compile(
                     clip_id=clip["id"], video_file=clip["video_path"],
                     caption_file=clip["caption_path"], account_id=job["account_id"],
                     title=clip["title"], description=clip["description"],
-                    hashtags=[h for h in (clip["hashtags"] or "").split()],
+                    hashtags=hashtags, hook_text=clip["hook_text"],
                 )
-            return {}
+            return True, {}
         except Exception as exc:
             return False, f"metadata: {type(exc).__name__}: {exc}"
     return handler
@@ -188,13 +190,11 @@ def _metadata_handler(cfg: Config, store: AccountStorage, MetadataCompiler) -> H
 # Registration
 # ---------------------------------------------------------------------------
 
-def register_workers(cfg: Config, db: Database,
+def register_workers(cfg: Config, db: Optional[Database] = None,
                      storage_root: Optional[str | Path] = None) -> list[str]:
-    """Register all stage adapters whose worker module is importable."""
+    """Register all available worker stages; returns the stages registered."""
     root = storage_root or (Path(cfg.resolved_db_path).parent.parent / "storage" / "accounts")
     store = AccountStorage(root)
-
-    registered: list[str] = []
 
     MediaDownloader = _import("modules.downloader", "MediaDownloader")
     WhisperTranscriber = _import("modules.transcriber", "WhisperTranscriber")
@@ -204,24 +204,19 @@ def register_workers(cfg: Config, db: Database,
     SubtitleRenderer = _import("modules.captioner", "SubtitleRenderer")
     MetadataCompiler = _import("modules.metadata", "MetadataCompiler")
 
+    registered: list[str] = []
     if MediaDownloader:
-        register_handler(DOWNLOADING, _make_handler(cfg, store, MediaDownloader))
-        registered.append(DOWNLOADING)
+        register_handler(DOWNLOADING, _make_downloader(cfg, store, MediaDownloader)); registered.append(DOWNLOADING)
     if WhisperTranscriber:
-        register_handler(TRANSCRIBING, _transcribe_handler(cfg, store, WhisperTranscriber))
-        registered.append(TRANSCRIBING)
+        register_handler(TRANSCRIBING, _make_transcriber(cfg, store, WhisperTranscriber)); registered.append(TRANSCRIBING)
     if ViralityAnalyzer:
-        register_handler(ANALYZING, _analyze_handler(cfg, store, ViralityAnalyzer))
-        registered.append(ANALYZING)
+        register_handler(ANALYZING, _make_analyzer(cfg, store, ViralityAnalyzer)); registered.append(ANALYZING)
     if VideoClipper:
-        register_handler(CLIPPING, _clip_handler(cfg, store, VideoClipper))
-        registered.append(CLIPPING)
+        register_handler(CLIPPING, _make_clipper(cfg, store, VideoClipper)); registered.append(CLIPPING)
     if ASSSubtitleGenerator and SubtitleRenderer:
-        register_handler(CAPTIONING, _caption_handler(cfg, store, ASSSubtitleGenerator, SubtitleRenderer))
-        registered.append(CAPTIONING)
+        register_handler(CAPTIONING, _make_captioner(cfg, store, ASSSubtitleGenerator, SubtitleRenderer)); registered.append(CAPTIONING)
     if MetadataCompiler:
-        register_handler(METADATA, _metadata_handler(cfg, store, MetadataCompiler))
-        registered.append(METADATA)
+        register_handler(METADATA, _make_metadata(cfg, store, MetadataCompiler)); registered.append(METADATA)
 
     log.info("registered %s worker stage(s): %s", len(registered), ", ".join(registered))
     return registered

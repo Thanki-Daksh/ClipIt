@@ -33,7 +33,9 @@
 | :--- | :--- | :---: | :--- |
 | **2026-08-07** | Agent 02 | `🟢 PASSED` | Validated transcript schema format |
 | **2026-08-07** | Agent 03 | `🟢 PASSED` | Validated 9:16 vertical video cut resolution |
-| **2026-08-07** | Agent 02/03/05 (modules) | `🟡 PENDING` | `modules/downloader.py`, `transcriber.py`, `analyzer.py`, `clipper.py`, `captioner.py`, `metadata.py` + `scripts/termux_monitor.py` not yet present. Queue parks jobs at `DOWNLOADING` until workers register handlers via `register_handler()`; recovery treats missing artifacts safely. Re-audit after sibling PRs land. |
+| **2026-08-07** | Agent 02/03/05 (modules) | `🟡 PENDING` | `modules/` still missing some modules. Queue parks jobs at `DOWNLOADING` until workers register handlers via `register_handler()`; recovery treats missing artifacts safely. Re-audit after sibling PRs land. |
+| **2026-08-07** | Agent 02/03 worker adapters | `🟢 PASSED` | `core/workers.py` successfully imported & registered all 6 live module classes (`downloader`, `transcriber`, `analyzer`, `clipper`, `captioner`, `metadata`) into the queue HANDLERS registry. Daemon E2E verified real worker wiring. |
+| **2026-08-07** | Agent 05 (daemon/runtime) | ✅ CHECKED | Daemon loop (`main.py --daemon`) now runs `register_workers()` before first tick; `resume --force` drives crash re-queue; `serve` exposes health check. 78/78 tests green. |
 
 
 

@@ -40,30 +40,17 @@ from core.logger import get_logger, setup_logging
 from core.queue import (
     QueueEngine, WORKING_STAGES,
 )
+from core.workers import register_workers
 
 log = get_logger("main")
 
 # ---------------------------------------------------------------------------
-# Worker import hook — Agent 02/03 modules register themselves at import time.
+# Worker wiring — real stage handlers registered from sibling Agent modules
 # ---------------------------------------------------------------------------
 
-def _try_load_workers() -> None:
-    """Import module workers for each pipeline stage if they exist."""
-    for stage in sorted(WORKING_STAGES):
-        module_name = {
-            "DOWNLOADING": "modules.downloader",
-            "TRANSCRIBING": "modules.transcriber",
-            "ANALYZING": "modules.analyzer",
-            "CLIPPING": "modules.clipper",
-            "CAPTIONING": "modules.captioner",
-            "METADATA": "modules.metadata",
-        }[stage]
-        try:
-            __import__(module_name)
-        except ImportError as exc:
-            log.debug("stage %s worker unavailable: %s", stage, exc)
-        except Exception as exc:  # a registered-worker ImportError, not a missing file
-            log.warning("stage %s worker failed to load: %s", stage, exc)
+def _try_load_workers(cfg: Config, db: Database) -> list[str]:
+    """Register every importable stage worker; returns registered stages."""
+    return register_workers(cfg, db)
 
 
 # ---------------------------------------------------------------------------
@@ -175,8 +162,14 @@ def cmd_list(cfg: Config, db: Database, args) -> int:
 
 def cmd_resume(cfg: Config, db: Database, args) -> int:
     engine = QueueEngine(db)
-    resumed = engine.recover()
-    print(f"clipit> recovery: resumed {len(resumed)} interrupted job(s): {resumed if resumed else 'none'}")
+    if getattr(args, "force", False):
+        requeued = engine.requeue_stuck(clear_error=True)
+        print(f"clipit> crash re-queue: {len(requeued)} stuck job(s) reset to PENDING: "
+              f"{requeued if requeued else 'none'}")
+    else:
+        resumed = engine.recover()
+        print(f"clipit> recovery: resumed {len(resumed)} interrupted job(s): "
+              f"{resumed if resumed else 'none'}")
     return 0
 
 
@@ -231,12 +224,28 @@ class Daemon:
 def cmd_daemon(cfg, db, args) -> int:
     if getattr(args, "poll", 0):
         cfg.polling_interval_seconds = args.poll
-    _try_load_workers()
+    if getattr(args, "requeue", False):
+        QueueEngine(db).requeue_stuck(clear_error=True)
+    registered = _try_load_workers(cfg, db)
+    if not registered:
+        log.warning("no worker stages registered — daemon will idle until modules exist")
     daemon = Daemon(cfg, db)
     if args.once:
         return daemon.run_once()
     daemon._install_signal_handlers()
     return daemon.run_loop()
+
+
+def cmd_serve(cfg, db, args) -> int:
+    """Run the healthcheck REST API (GET /health)."""
+    from core.health import create_health_app
+    storage_root = Path(cfg.resolved_db_path).parent.parent / "storage" / "accounts"
+    app = create_health_app(db=db, storage_root=storage_root)
+
+    import uvicorn
+    log.info("health API listening on %s:%s (GET /health)", args.host, args.port)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -273,15 +282,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p_url.add_argument("--source-type", choices=["youtube", "local_file"], default="youtube")
 
     sub.add_parser("list", help="show accounts, jobs and clips")
-    sub.add_parser("resume", help="recover interrupted jobs")
+
+    p_resume = sub.add_parser("resume", help="recover interrupted jobs")
+    p_resume.add_argument("--force", action="store_true",
+                          help="crash re-queue: reset stuck mid-stage jobs to PENDING")
 
     p_daemon = sub.add_parser("daemon", help="run the background supervisor")
     p_daemon.add_argument("--once", action="store_true",
                           help="process a single tick and exit")
     p_daemon.add_argument("--poll", type=int, default=0,
                           help="override polling interval (seconds)")
+    p_daemon.add_argument("--requeue", action="store_true",
+                          help="crash re-queue stuck jobs to PENDING before ticking")
     p_daemon.add_argument("--workers", action="store_true",
                           help="attempt to load stage worker modules")
+
+    p_serve = sub.add_parser("serve", help="run the healthcheck REST API")
+    p_serve.add_argument("--port", type=int, default=8001,
+                         help="port to bind (default 8001)")
+    p_serve.add_argument("--host", default="0.0.0.0",
+                         help="host to bind")
 
     return p.parse_args(argv)
 
@@ -307,6 +327,10 @@ def main(argv: list[str] | None = None) -> int:
         cfg.resolved_db_path = Path(args.db).resolve()
 
     db = Database(cfg.resolved_db_path)
+    try:
+        db.init_schema()
+    except Exception as exc:
+        log.warning("DB auto-init warning: %s", exc)
 
     if args.cmd == "init":
         return cmd_init(cfg, db, args)
@@ -320,6 +344,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_resume(cfg, db, args)
     if args.cmd == "daemon":
         return cmd_daemon(cfg, db, args)
+    if args.cmd == "serve":
+        return cmd_serve(cfg, db, args)
     print("clipit> error: unknown command", file=sys.stderr)
     return 2
 

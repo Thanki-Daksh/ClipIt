@@ -158,8 +158,13 @@ class Database:
             # executescript() auto-commits pending transactions, so run each
             # statement individually to stay inside the atomic block.
             for stmt in _SCHEMA_SQL.split(";"):
-                if stmt.strip():
-                    conn.execute(stmt)
+                stmt_clean = stmt.strip()
+                if stmt_clean:
+                    try:
+                        conn.execute(stmt_clean)
+                    except sqlite3.OperationalError as exc:
+                        if "already exists" not in str(exc):
+                            log.debug("Schema stmt notice: %s", exc)
             current = conn.execute("PRAGMA user_version;").fetchone()[0]
             if current < SCHEMA_VERSION:
                 self._migrate(conn, current, SCHEMA_VERSION)
@@ -191,9 +196,6 @@ class Database:
                 conn.execute("ROLLBACK;")
                 raise
 
-    # ------------------------------------------------------------------
-    # Audit log
-    # ------------------------------------------------------------------
     # ------------------------------------------------------------------
     # Audit log
     # ------------------------------------------------------------------

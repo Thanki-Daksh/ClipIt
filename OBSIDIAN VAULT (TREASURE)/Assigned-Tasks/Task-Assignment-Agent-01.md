@@ -1,7 +1,7 @@
 # 📋 CEO TASK ASSIGNMENT: AGENT 01 (SYSTEMS ARCHITECT)
 
 > [!IMPORTANT] **CEO Directive for Agent 01**
-> **Target Files**: core/config.py, core/db.py, core/queue.py, core/logger.py, main.py
+> **Target Files**: core/config.py, core/db.py, core/queue.py, core/logger.py, core/storage.py, core/workers.py, core/health.py, main.py
 > **Primary Model**: Gemini 3.6 Flash (High Effort)
 > **Free Fallback**: deepseek-v4-flash-free (200k Context)
 
