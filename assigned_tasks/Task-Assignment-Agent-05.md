@@ -1,30 +1,35 @@
-# 📋 CEO TASK ASSIGNMENT: AGENT 05 (MOBILE DAEMON OS RUNTIME)
+# 📋 CEO TASK ASSIGNMENT: AGENT 05 (SOCIAL PUBLISHER & API INTEGRATOR)
 
 > [!IMPORTANT] **CEO Directive for Agent 05**
-> **Target Files**: scripts/start.sh, scripts/stop.sh, scripts/termux_monitor.py, scripts/boot_recovery.sh
-> **Primary Model**: deepseek-v4-flash-free (OpenCode Zen - 200k Context - FREE!)
-> **Secondary Fallback**: Gemini 3.6 Flash
+> **Target Files**: modules/publisher_yt.py, modules/publisher_ig.py, core/auth.py
+> **Primary Model**: Gemini 3.6 Flash (High Effort)
+> **Free Fallback**: deepseek-v4-flash-free (200k Context)
 
 ---
 
 ## 🎯 Central Hub Connections
 - 💎 **[[Index| Master Vault Index]]**
 - 👑 **[[CEO-Operational-Guide| CEO Orchestrator Guide]]**
-- 📱 **[[Agent-05-Mobile-Daemon-OS-Runtime| Agent 05 Hub]]**
+- 🤖 **[[Agent-05-Social-Publisher-API-Integrator| Agent 05 Hub]]**
 
 ---
 
-## 📋 Assigned Tasks Matrix
+## 📋 Assigned Tasks Matrix (15 Tasks)
 
 | Task ID | Task Title | Priority | Status | Target Deliverable |
 | :---: | :--- | :---: | :---: | :--- |
-| **TSK-A05-01** | Build Daemon Launcher Script | CRITICAL | [x] COMPLETED | scripts/start.sh with PID file tracking & wake-lock |
-| **TSK-A05-02** | Integrate Termux CPU Wake-Lock | HIGH | [x] COMPLETED | termux-wake-lock on launch & release on shutdown (start.sh + stop.sh) |
-| **TSK-A05-03** | Build Battery & Thermal Safeguard | HIGH | [x] COMPLETED | scripts/termux_monitor.py pauses at <15% unplugged / >43°C |
-| **TSK-A05-04** | Build Termux Boot Recovery Script | MEDIUM | [x] COMPLETED | scripts/boot_recovery.sh auto-starts daemon on boot |
-| **TSK-A05-05** | Termux Wi-Fi Network Check | HIGH | [x] COMPLETED | scripts/termux_monitor.py pauses downloads on cellular/metered (require_wifi) |
-| **TSK-A05-06** | Disk Storage Threshold Guard | HIGH | [x] COMPLETED | scripts/termux_monitor.py pauses pipeline when free disk < 1 GB |
-| **TSK-A05-07** | Android Auto-Start Service | MEDIUM | [x] COMPLETED | boot_recovery.sh --install writes ~/.termux/boot/clipit_boot.sh |
-| **TSK-A05-08** | CPU Low-Power Governor Switch | MEDIUM | [x] COMPLETED | thermal ladder -> storage/logs/concurrency.json recommended_workers for main.py |
-| **TSK-A05-09** | YouTube Shorts Auto-Poster Module | CRITICAL | [x] COMPLETED | modules/publisher_yt.py — YouTube Data API v3 resumable upload |
-| **TSK-A05-10** | Instagram Reels Auto-Publisher Module | CRITICAL | [x] COMPLETED | modules/publisher_ig.py — Instagram Graph API two-phase Reels publish |
+| **TSK-A05-01** | Build modules/publisher_yt.py Shorts Engine | CRITICAL | [x] COMPLETED | Upload 9:16 MP4 to YouTube Shorts via Data API v3 |
+| **TSK-A05-02** | Build modules/publisher_ig.py Reels Engine | CRITICAL | [x] COMPLETED | Publish Reels via Instagram Graph API container workflow |
+| **TSK-A05-03** | Build core/auth.py OAuth Token Refresh | HIGH | [x] COMPLETED | Auto-refresh expired OAuth access tokens using refresh_token |
+| **TSK-A05-04** | Upload Retry & Rate Limit Engine | HIGH | [x] COMPLETED | Retry failed uploads with exponential backoff up to 3 attempts |
+| **TSK-A05-05** | Publish Schedule Time Dispatcher | MEDIUM | [x] COMPLETED | Dispatch approved clips at designated scheduled timestamps |
+| **TSK-A05-06** | Mock Publisher Mode | HIGH | [x] COMPLETED | Simulated upload response when OAuth tokens are absent |
+| **TSK-A05-07** | Video Upload Progress Telemetry | HIGH | [x] COMPLETED | Track upload byte progress and stream status updates |
+| **TSK-A05-08** | Multi-Account Token Rotator | HIGH | [x] COMPLETED | Rotate credentials across multiple YouTube channels |
+| **TSK-A05-09** | Instagram Container Status Poller | CRITICAL | [x] COMPLETED | Poll Instagram media container until status_code == 'FINISHED' |
+| **TSK-A05-10** | Video Category & Privacy Flags | MEDIUM | [x] COMPLETED | Set privacyStatus (public/unlisted) and categoryId = 22 |
+| **TSK-A05-11** | Automatic Hashtags & Caption Injector | HIGH | [x] COMPLETED | Append #Shorts #Reels to video descriptions automatically |
+| **TSK-A05-12** | Upload Quota Safety Guard | CRITICAL | [x] COMPLETED | Enforce daily quota limits (6 YouTube uploads / account / day) |
+| **TSK-A05-13** | Failed Upload Log & Audit Trail | HIGH | [x] COMPLETED | Record API error responses in job_logs database table |
+| **TSK-A05-14** | Custom Cover Frame Uploader | MEDIUM | [x] COMPLETED | Upload custom poster frame PNG along with video submission |
+| **TSK-A05-15** | Post-Publish Verification Probe | HIGH | [x] COMPLETED | Verify uploaded video URL is live and publicly accessible |

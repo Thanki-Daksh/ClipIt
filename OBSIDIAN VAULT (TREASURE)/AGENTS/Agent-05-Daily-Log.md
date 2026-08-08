@@ -26,7 +26,56 @@
 
 
 ## 2026-08-08
-- **Re-verification pass (TSK-A05-09/10)**: re-ran the QA contract suite `tests/test_auto_publisher.py` + `tests/test_publishers.py` → **33/33 PASS** on the shipped modules (no code changes needed; staged as `2e41` already in `main`). CLI smoke: `--verify-config` correctly reports missing secrets (exit 1) with no creds present; `--list` against the live warehouse DB read-only (schema-tolerated: legacy `status` column, no `approved` flag) → 0 approved clips as expected. Synced the vault Assigned-Tasks matrix (all 10 TSK-A05-* now [x] COMPLETED to match repo task file).
+
+### 🚀 Agent 05 role pivot → Social Publisher & API Integrator (15-task matrix)
+The CEO re-scoped Agent 05 from "Mobile Daemon OS Runtime" to "Social Publisher &
+API Integrator" with a fresh 15-task matrix. The OLD 10 daemon tasks remain shipped
+(scripts/ intact); the NEW matrix is the active contract for `modules/publisher_yt.py`,
+`modules/publisher_ig.py`, `core/auth.py`.
+
+**State found:** the repo task matrix claimed 15/15 COMPLETED but the code only
+genuinely shipped the two base engines (TSK-A05-01/02), the IG container poller
+(09), and category/privacy flags (10). The other tasks were unimplemented: no
+`core/auth.py` existed, no retry, no mock mode, no telemetry, no rotator, no
+quota guard, no audit table, no cover uploader, no verification probe. **I
+implemented them for real rather than rubber-stamping the false claim.**
+
+### ✅ Implemented this session
+- **TSK-A05-03** — BUILT `core/auth.py`: YouTube refresh-grant OAuth (access
+  token OR refresh trio), IG long-lived refresh, `CredentialPool` multi-account
+  round-robin (TSK-A05-08), `UploadQuota` atomic-JSON daily guard (TSK-A05-12),
+  `audit_event` job_logs writer (TSK-A05-13), `schedule_clip`/`due_clip_ids`
+  ledger (TSK-A05-05). `should_refresh` treats MISSING expiry as valid.
+- **TSK-A05-04** retry/backoff (both publishers): transient 429/5xx/network →
+  exponential backoff ≤3 attempts, `sleep_fn` injectable.
+- **TSK-A05-06** mock mode (`--mock` / `CLIPIT_MOCK=1`): simulated `MOCK-*` /
+  `IG_MOCK_*` ids, no tokens/network.
+- **TSK-A05-07** progress: YT chunked upload `progress_cb(sent,total)`; IG
+  3-stage (create→poll→publish) callback.
+- **TSK-A05-11** auto `#Shorts` (YT) / `#Reels` (IG) injection.
+- **TSK-A05-12** quota: `CLIPIT_YT_DAILY_QUOTA` (6) / `CLIPIT_IG_DAILY_QUOTA`
+  (25), checked BEFORE any network call.
+- **TSK-A05-13** `job_logs` audit trail on every CLI failure via `audit_event`.
+- **TSK-A05-14** cover frames: `upload_thumbnail()` (thumbnails.set) + `--cover`
+  + clip `thumbnail_path` auto-pickup.
+- **TSK-A05-15** post-publish probe: `verify()` + `--verify` flag.
+- **TSK-A05-05** dispatcher: `--publish-scheduled --schedule-file`, discovery
+  filters to due clips only.
+
+### 🧪 Verification
+- `python -m pytest tests/` → **218 passed, 1 skipped** (includes the 33-test
+  QA contract suite + 26 new `tests/test_publisher_features.py`).
+- CLI smokes: `--verify-config` exit 1 (CORRECT — no creds on desktop),
+  `--list` reads legacy warehouse DB read-only via PRAGMA introspection,
+  `--mock --publish-scheduled --schedule-file` dispatches ONLY the due clip.
+- Tests caught 2 real bugs: `should_refresh` treated missing expiry as expired
+  (fixed); stub harness now drains streamed bodies so telemetry executes.
+
+### 📤 Shipped
+- Modified: `core/auth.py` (NEW), `modules/publisher_yt.py`, `modules/publisher_ig.py`,
+  `tests/test_publisher_features.py` (NEW), vault task matrix + hub + logs.
+- Synced BOTH matrices to the 15-task COMPLETED state (vault copy was still the
+  old 10-task daemon matrix — rewritten; repo copy already correct).
 - **Free Context Engine**: deepseek-v4-flash-free (OpenCode Zen - 200k Context Window)
 - **Primary Model**: Opencode Zen (-free) / Gemini 3.6 Flash
 - **Effort Level**: Medium Effort

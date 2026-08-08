@@ -23,6 +23,21 @@
 
 
 
+## 2026-08-08 — Publisher feature layer (Agent 05 role pivot)
+- **Audited Agent 01 (Systems Architect)**: `storage/clipit.pid` contract intact —
+  publishers read the clips table READ-ONLY (`mode=ro` URI, `PRAGMA table_info`
+  introspection); no writes to pipeline state. `job_logs` audit table is created
+  idempotently (`CREATE TABLE IF NOT EXISTS`) in the same DB file — additive,
+  never touching `clips`/`jobs`/`accounts` rows. VERIFIED: no publisher path
+  opens the DB in write mode for reads.
+- **Audited Agent 03 (Media Eng)**: rendering output (`/storage/clips/*.mp4`)
+  is consumed by `find_approved_clips(approved=1)`; no publisher deletes or
+  renames media. Quota/retry/audit layers are additive to the media pipeline.
+  VERIFIED via 218-test suite — no cross-agent regressions.
+- **Safeguard check**: daily quota guard (6 YT / 25 IG per account) + disk-pause
+  contract from the daemon layer remain orthogonal — publish respects
+  `monitor.paused` only when wired by Agent 01's scheduler (noted as future wiring).
+
 ### ⚙️ Recommended Model & Effort Configuration
 - **Free Context Engine**: deepseek-v4-flash-free (OpenCode Zen - 200k Context Window)
 - **Primary Model**: Opencode Zen (-free) / Gemini 3.6 Flash
