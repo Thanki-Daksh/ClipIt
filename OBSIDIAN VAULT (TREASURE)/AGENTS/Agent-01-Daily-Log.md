@@ -47,6 +47,14 @@
 - **Applied to the live DB**: SQLite-backup-API backup → `storage/backups/clipit-20260808-predurability.db`, migrated via the app path, purged confirmed orphans, checkpointed. Live DB now: synchronous=2, quick_check ok, 0 orphans.
 - **Tests**: `tests/test_db_durability.py` (19) — pragmas/env override, rollback atomicity, nested-tx guard, reopen durability, FK cascade, orphan detection, legacy migration (+idempotency, indexes). Full suite **160 passed**; smoke test #9 now also asserts `synchronous=2`.
 
+## 2026-08-08 (third session) — Full 15-task board verification PASS
+- **All 15 TSK-A01 tasks re-verified against live code after the concurrent-session merge (03aec07) and my bb9d737**: every status on the board is genuinely true.
+- **TSK-A01-12** Migration Engine: column-detection `_migrate` + `user_version` bump (core/db.py:230-232) — covered by test_db_durability migration tests.
+- **TSK-A01-13** Concurrency Guard: `PRAGMA busy_timeout=10000` at connect (spec floor was 5000 — deliberately stricter) + WAL mode enforced (core/db.py:187).
+- **TSK-A01-14** Atomic Transition Logging: every queue transition + tick + completion emits `db.log_event` → `logs` (level, job_id, account_id, message, data_json); nested-tx hazard handled by emitting after the write tx commits (core/queue.py:132,167,192,256,338).
+- **TSK-A01-15** Graceful Shutdown: `_install_signal_handlers()` (SIGINT/SIGTERM → `_stop`), loop `while not self._stop`, then TRUNCATE checkpoint inside try/except (main.py:191-231).
+- **Verification gates**: targeted concurrency/queue/e2e/durability suites green; full suite **163 passed** (excluding other agents' unfiltered WIP test files); `scratch/smoke_test.py` ALL PASSED (8-stage pipeline, retry ladder, round-robin, recovery, pragma step now asserts synchronous=2).
+
 
 
 ### ⚙️ Recommended Model & Effort Configuration
