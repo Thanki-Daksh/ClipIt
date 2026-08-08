@@ -18,11 +18,13 @@
 
 | Task ID | Task Title | Priority | Status | Target Deliverable |
 | :---: | :--- | :---: | :---: | :--- |
-| **TSK-A03-01** | Build FFmpeg 9:16 Crop Engine | CRITICAL | [ ] PENDING | Implement center crop & stacked blurred background render modes |
-| **TSK-A03-02** | Build ASS Subtitle Generator | CRITICAL | [ ] PENDING | Encode ASS subtitle header & word-by-word active BGR highlight colors |
-| **TSK-A03-03** | Build Subtitle Burn-In Pipeline | HIGH | [ ] PENDING | Run FFmpeg subtitle burn-in filter without audio sync drift |
-| **TSK-A03-04** | Build Metadata Package Compiler | MEDIUM | [ ] PENDING | Write metadata.json alongside output .mp4 clip in account storage |
-| **TSK-A03-05** | 3 ASS Subtitle Style Presets | HIGH | [ ] PENDING | Add VIRAL_YELLOW, MINIMAL_WHITE, NEON_CYAN presets |
-| **TSK-A03-06** | Dual-Pass Render Engine | HIGH | [ ] PENDING | Implement h264_nvenc with fallback to libx264 |
-| **TSK-A03-07** | Speaker Face Auto-Crop Math | HIGH | [ ] PENDING | Calculate dynamic bounding box for vertical center cropping |
-| **TSK-A03-08** | Audio Loudness Normalizer | MEDIUM | [ ] PENDING | Apply FFmpeg loudnorm filter for broadcast audio standards |
+|| **TSK-A03-01** | Build FFmpeg 9:16 Crop Engine | CRITICAL | [x] COMPLETED | Center crop & stacked blurred background render modes verified (1080x1920) |
+|| **TSK-A03-02** | Build ASS Subtitle Generator | CRITICAL | [x] COMPLETED | ASS header + word-by-word active BGR highlight colors encoded & verified |
+|| **TSK-A03-03** | Build Subtitle Burn-In Pipeline | HIGH | [x] COMPLETED | FFmpeg subtitle burn-in via `subtitles=` filter w/ `-c:a copy` (zero drift) |
+|| **TSK-A03-04** | Build Metadata Package Compiler | MEDIUM | [x] COMPLETED | metadata.json written alongside .mp4 in account outputs/ verified |
+|| **TSK-A03-05** | 3 ASS Subtitle Style Presets | HIGH | [x] COMPLETED | VIRAL_YELLOW / MINIMAL_WHITE / NEON_CYAN presets verified |
+|| **TSK-A03-06** | Dual-Pass Render Engine | HIGH | [x] COMPLETED | h264_nvenc w/ functional driver probe + automatic libx264 fallback |
+|| **TSK-A03-07** | Speaker Face Auto-Crop Math | HIGH | [x] COMPLETED | Dynamic 9:16 window centered on face bbox, clamped + even-safe |
+|| **TSK-A03-08** | Audio Loudness Normalizer | MEDIUM | [x] COMPLETED | FFmpeg loudnorm I=-16 TP=-1.5 LRA=11 verified -16.0 LUFS |
+|| **TSK-A03-09** | Real FFmpeg 9:16 Crop & ASS Subtitle Burn-In | CRITICAL | [x] COMPLETED | `test/e2e_agent03.py` renders real 1080x1920 MP4 + burns word-highlight ASS; caption strip pixel-diff verified |
+|| **TSK-A03-10** | Shorts & Reels Metadata & Hash Packaging | HIGH | [x] COMPLETED | `format_for_platform`/`compile_package` emit post_shorts.json + post_reels.json w/ title caps & #-normalized tags |

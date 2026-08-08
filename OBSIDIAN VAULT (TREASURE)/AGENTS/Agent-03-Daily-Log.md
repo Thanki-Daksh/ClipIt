@@ -23,6 +23,14 @@
 - **TSK-A03-09 REAL CROP+BURN E2E**: Added `test/e2e_agent03.py` — produces a REAL 1080x1920 vertical MP4 from a 1920x1080 source: `VideoClipper.cut_clip` (center+libx264+loudnorm) -> `ASSSubtitleGenerator` (VIRAL_YELLOW) -> `SubtitleRenderer.burn_subtitles` (-c:a copy) -> `MetadataCompiler.compile_package`. ALL CHECKS PASSED; caption strip pixel-diff = 292,946/324,000 changed pixels (word highlight truly burned). Full pytest run: **73/78** (5 new failures are all in Agent 06's UNCOMMITTED test files: test_auto_publisher, test_live_pipeline, test_oauth_credentials, test_persistence, test_security — not my modules).
 - **TSK-A03-10 SHORTS/REELS PACKAGING**: Extended `modules/metadata.py` with `PLATFORM_LIMITS`, `format_for_platform()` and `compile_package()`. Writes `post_shorts.json` (forces #shorts, 100-char title cap) and `post_reels.json` (title-led caption body, 2,200-char cap). Both verified via `test/e2e_agent03.py` => metadata.json + post_shorts.json + post_reels.json produced in `storage/accounts/acc_media01/outputs/`.
 
+## 2026-08-08 (VERIFICATION SESSION — all 10 tasks confirmed)
+- **FULL RE-VERIFICATION RUN**: Executed `python test/e2e_agent03.py` end-to-end (real render, no mocks): `VideoClipper.cut_clip` center crop + loudnorm => **1080x1920, 7.01s, libx264**; `ASSSubtitleGenerator` VIRAL_YELLOW => 10 highlighted lines; `SubtitleRenderer.burn_subtitles` (`-c:a copy`) => captioned final MP4; `MetadataCompiler.compile_package` => metadata.json + post_shorts.json + post_reels.json. **ALL CHECKS PASSED.**
+- **RENDER TIMES (FFmpeg 8.1.1 gyan, libx264 fast preset)**: 9:16 crop+burn+loudnorm of a 7s clip ~= 10s wall (crop 6s, burn-in 4s) on this host. Zero audio drift by construction (`-c:a copy`).
+- **BURN-IN MD5 AUDIT (Rule 3 / no-vision fallback)**: caption strip (`crop=1080:300:0:1450` @ t=0.3) of captioned clip `MD5=924a9106...` vs freshly cut uncaptioned reference `MD5=237cfdca...` => **DIFFERENT => subtitles truly burned in**.
+- **ASS SYNTAX CONFIRMED**: active-word highlight `{\c&H0000FFFF&}` (trailing `&` terminator); `subtitles=` filter fed basename only from the .ass dir (Windows drive-colon workaround) — no regressions.
+- **REG VERSION**: `verify_agent03` **7/7**, `verify_agent03_v2` **16/16**, `pytest e2e_agent03 + test_subtitle_render` **8/8** — all green.
+- **TASK MATRIX**: Vault copy of `Task-Assignment-Agent-03.md` synced from PENDING to **[x] COMPLETED × 10** (repo copy already committed COMPLETED in e1710c3).
+
 
 
 ### 👁️ Multimodal Vision Capability (PRIMARY)

@@ -33,6 +33,10 @@
 | `e2e_agent03.py` real crop+burn | 🟢 1080x1920 | final captioned MP4 ffprobe-verified; caption strip pixel-diff 292,946 set |
 | `metadata.py` Shorts package | 🟢 post_shorts.json | #shorts injected, 100-char title cap, tags #-normalized |
 | `metadata.py` Reels package | 🟢 post_reels.json | title-led caption body, 2,200-char cap |
+| **2026-08-08 re-verify: `e2e_agent03.py` real render** | 🟢 1080x1920 | final captioned MP4 ffprobe-verified `(1080,1920)` dur 7.01s |
+| **2026-08-08 re-verify: burn-in MD5 audit** | 🟢 visible | caption strip hash `924a9106...` vs raw `237cfdca...` — DIFFERENT => captions burned |
+| **2026-08-08 re-verify: Shorts/Reels packaging** | 🟢 both packages | post_shorts.json (#shorts injected) + post_reels.json (title-led caption) re-emitted & asserted |
+| **2026-08-08 re-verify: suites** | 🟢 31/31 | verify_agent03 7/7 + verify_agent03_v2 16/16 + pytest 8/8 |
 
 
 
