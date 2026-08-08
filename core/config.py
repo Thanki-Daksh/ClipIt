@@ -45,6 +45,8 @@ _ENV_KEY_MAP = {
     "groq_api_key": "GROQ_API_KEY",
     "gemini_api_key": "GEMINI_API_KEY",
     "openai_api_key": "OPENAI_API_KEY",
+    "youtube_api_key": "YOUTUBE_API_KEY",
+    "instagram_api_key": "INSTAGRAM_API_KEY",
 }
 
 # .env / environment variable names for runtime settings
@@ -64,6 +66,8 @@ class Config:
     groq_api_key: str = ""
     gemini_api_key: str = ""
     openai_api_key: str = ""
+    youtube_api_key: str = ""
+    instagram_api_key: str = ""
     database_path: str = "storage/clipit.db"
     polling_interval_seconds: int = 300
     max_daily_clips_per_account: int = 3

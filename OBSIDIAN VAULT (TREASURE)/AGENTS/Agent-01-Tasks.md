@@ -18,6 +18,8 @@
 - [x] Enforce storage/{account_id}/raw and /clips directory segregation
 - [x] Implement Crash Re-Queue Engine for stuck mid-stage jobs
 - [x] Implement System Healthcheck REST API (`GET /health` in `core/health.py`)
+- [x] OAuth Credentials DB Schema — `oauth_credentials` table (YouTube/Instagram, Fernet-at-rest) (TSK-A01-10)
+- [x] API Keys & Configuration Persistence Engine — atomic config.json/.env writes + `secret` CLI (TSK-A01-11)
 
 
 

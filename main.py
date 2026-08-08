@@ -34,7 +34,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from core.config import Config, ConfigError, load_config
+from core.config import Config, ConfigError, load_config, _ENV_KEY_MAP
 from core.db import Database
 from core.logger import get_logger, setup_logging
 from core.queue import (
@@ -249,6 +249,93 @@ def cmd_serve(cfg, db, args) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Secret persistence (TSK-A01-11) + OAuth credential management (TSK-A01-10)
+# ---------------------------------------------------------------------------
+
+def cmd_secret(cfg, db, args) -> int:
+    """Persist/query API keys and runtime settings in config.json / .env."""
+    from core.config import PROJECT_ROOT
+    from core.persistence import ConfigStore
+    store = ConfigStore(
+        config_path=args.config or (PROJECT_ROOT / "config.json"),
+        dotenv_path=PROJECT_ROOT / ".env",
+    )
+    action = args.action
+    if action == "set-key":
+        store.set_api_key(args.provider, args.value)
+        print(f"clipit> stored API key for provider '{args.provider}'")
+    elif action == "unset-key":
+        removed = store.unset_api_key(args.provider)
+        print(f"clipit> removed API key for '{args.provider}'" if removed
+              else f"clipit> no key found for '{args.provider}'")
+    elif action == "show-key":
+        key = store.api_key(args.provider)
+        if key:
+            print(f"clipit> {args.provider}: {key[:4]}…{key[-4:]} (stored)")
+        else:
+            print(f"clipit> no API key stored for '{args.provider}'")
+    elif action == "set-setting":
+        store.set_setting(args.name, args.value)
+        print(f"clipit> stored setting '{args.name}' = {args.value!r}")
+    elif action == "unset-setting":
+        removed = store.unset_setting(args.name)
+        print(f"clipit> removed setting '{args.name}'" if removed
+              else f"clipit> no setting '{args.name}'")
+    else:  # list
+        env = store.read_dotenv()
+        providers = [p for p in ("groq", "gemini", "openai") if env.get(_ENV_KEY_MAP.get(f"{p}_api_key", ""))]
+        print("clipit> api keys stored for providers:", ", ".join(providers) or "none")
+        j = store.read_json()
+        if j:
+            print("clipit> config.json settings:")
+            for k, v in j.items():
+                print(f"  {k} = {v!r}")
+    return 0
+
+
+def cmd_oauth(cfg, db, args) -> int:
+    """Add / list / revoke YouTube or Instagram OAuth credentials."""
+    from core.persistence import CredentialCrypto
+    crypto = CredentialCrypto()
+    action = args.action
+    if action == "add":
+        if not args.account or not args.provider or not args.access_token:
+            print("clipit> error: oauth add needs --account, --provider, --access-token")
+            return 2
+        if not db.get_account(args.account):
+            print(f"clipit> error: unknown account '{args.account}' — add it first (add-account)")
+            return 2
+        enc_at = crypto.encrypt_secret(args.access_token)
+        enc_rt = None
+        if getattr(args, "refresh_token", None):
+            enc_rt = crypto.encrypt_secret(args.refresh_token)
+        db.upsert_oauth_credential(
+            account_id=args.account, provider=args.provider,
+            access_token_enc=enc_at, refresh_token_enc=enc_rt,
+            scopes=getattr(args, "scopes", None) or None,
+            expires_at=getattr(args, "expires_at", None) or None,
+        )
+        print(f"clipit> stored {args.provider} OAuth credential for '{args.account}' (encrypted at rest)")
+    elif action == "list":
+        rows = db.list_oauth_credentials(args.provider or None)
+        if not rows:
+            print("clipit> no stored OAuth credentials")
+        else:
+            print(f"clipit> OAuth credentials ({len(rows)}):")
+            for r in rows:
+                print(f"  {r['account_id']}/{r['provider']}  expires={r['expires_at'] or 'never'}  "
+                      f"revoked={r['revoked']}")
+    elif action == "revoke":
+        ok = db.revoke_oauth_credential(args.account, args.provider)
+        print(f"clipit> revoked {args.provider} credential for '{args.account}'" if ok
+              else f"clipit> no active {args.provider} credential for '{args.account}'")
+    else:
+        print("clipit> error: unknown oauth action")
+        return 2
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
 
@@ -303,6 +390,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p_serve.add_argument("--host", default="0.0.0.0",
                          help="host to bind")
 
+    p_secret = sub.add_parser("secret", help="persist/query API keys & settings")
+    p_secret.add_argument("action", choices=["set-key", "unset-key", "show-key",
+                                             "set-setting", "unset-setting", "list"])
+    p_secret.add_argument("--provider", help="groq | gemini | openai")
+    p_secret.add_argument("--value", help="key value or setting value")
+    p_secret.add_argument("--name", help="setting name (set-setting)")
+    p_secret.add_argument("--config", help="target config.json path")
+
+    p_oauth = sub.add_parser("oauth", help="manage OAuth credentials (encrypted at rest)")
+    p_oauth.add_argument("action", choices=["add", "list", "revoke"])
+    p_oauth.add_argument("--account", help="account id")
+    p_oauth.add_argument("--provider", choices=["youtube", "instagram"],
+                         help="credential provider")
+    p_oauth.add_argument("--access-token", help="OAuth access token (required for add)")
+    p_oauth.add_argument("--refresh-token", help="OAuth refresh token")
+    p_oauth.add_argument("--scopes", help="space/comma separated OAuth scopes")
+    p_oauth.add_argument("--expires-at", help="token expiry timestamp (YYYY-MM-DD HH:MM:SS)")
+
     return p.parse_args(argv)
 
 
@@ -346,6 +451,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_daemon(cfg, db, args)
     if args.cmd == "serve":
         return cmd_serve(cfg, db, args)
+    if args.cmd == "secret":
+        return cmd_secret(cfg, db, args)
+    if args.cmd == "oauth":
+        return cmd_oauth(cfg, db, args)
     print("clipit> error: unknown command", file=sys.stderr)
     return 2
 

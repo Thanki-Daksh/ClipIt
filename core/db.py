@@ -34,7 +34,7 @@ from core.logger import get_logger
 
 log = get_logger("db")
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # ---------------------------------------------------------------------------
 # Schema
@@ -105,6 +105,28 @@ CREATE TABLE IF NOT EXISTS logs (
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_account ON jobs(account_id);
 CREATE INDEX IF NOT EXISTS idx_clips_job ON clips(job_id);
+
+-- OAuth / long-lived credential store (TSK-A01-10)
+-- Stores YouTube Data API + Instagram Graph API tokens for N accounts
+-- Token payloads are encrypted at rest via core/credentials (Fernet)
+-- so raw columns hold only non-sensitive metadata like scopes & timestamps
+CREATE TABLE IF NOT EXISTS oauth_credentials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL,
+    provider TEXT NOT NULL CHECK (provider IN ('youtube', 'instagram')),
+    scopes TEXT,
+    access_token_enc TEXT,
+    refresh_token_enc TEXT,
+    expires_at TIMESTAMP,
+    revoked INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(account_id, provider),
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_account ON oauth_credentials(account_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_provider ON oauth_credentials(provider);
 """
 
 
@@ -155,9 +177,14 @@ class Database:
     def init_schema(self) -> None:
         """Create all tables + indexes (idempotent; migrate if version older)."""
         with self.transaction() as conn:
-            # executescript() auto-commits pending transactions, so run each
-            # statement individually to stay inside the atomic block.
-            for stmt in _SCHEMA_SQL.split(";"):
+            # Strip "--"-prefixed comment lines, then split on ";" so a comment
+            # can never truncate a CREATE statement. executescript() would
+            # auto-commit the enclosing tx, so run each statement individually.
+            sql_lines = [
+                ln for ln in _SCHEMA_SQL.splitlines()
+                if not ln.lstrip().startswith("--")
+            ]
+            for stmt in "\n".join(sql_lines).split(";"):
                 stmt_clean = stmt.strip()
                 if stmt_clean:
                     try:
@@ -245,6 +272,14 @@ class Database:
                 "SELECT * FROM accounts WHERE enabled = 1 ORDER BY name"
             ).fetchall()
         return self._conn().execute("SELECT * FROM accounts ORDER BY name").fetchall()
+
+    def delete_account(self, account_id: str) -> bool:
+        """Delete an account and cascade to its jobs/clips/credentials."""
+        with self.transaction() as conn:
+            cur = conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+        if cur.rowcount:
+            log.info("deleted account %s (cascaded dependent rows)", account_id)
+        return cur.rowcount > 0
 
     def account_sources(self, account_id: str) -> list[str]:
         row = self.get_account(account_id)
@@ -373,6 +408,85 @@ class Database:
             "SELECT * FROM jobs WHERE account_id = ? AND status = 'PENDING' "
             "ORDER BY created_at ASC", (account_id,)
         ).fetchall()
+
+
+# ------------------------------------------------------------------
+    # OAuth credentials (TSK-A01-10) — YouTube Data API / Instagram Graph API
+    # ------------------------------------------------------------------
+
+    def upsert_oauth_credential(
+        self,
+        account_id: str,
+        provider: str,
+        access_token_enc: Optional[str] = None,
+        refresh_token_enc: Optional[str] = None,
+        scopes: Optional[str] = None,
+        expires_at: Optional[str] = None,
+    ) -> None:
+        """
+        Insert or update a single OAuth credential row for an account+provider.
+        Token payloads are expected to already be encrypted by the caller
+        (core/credentials); this layer only persists ciphertext.
+        """
+        if provider not in ("youtube", "instagram"):
+            raise ValueError(f"unsupported credential provider: {provider}")
+        if not self.get_account(account_id):
+            raise ValueError(f"unknown account: {account_id}")
+
+        with self.transaction() as conn:
+            existing = conn.execute(
+                "SELECT id FROM oauth_credentials WHERE account_id=? AND provider=?",
+                (account_id, provider),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE oauth_credentials SET access_token_enc=?, refresh_token_enc=?, "
+                    "scopes=?, expires_at=?, revoked=0, updated_at=CURRENT_TIMESTAMP "
+                    "WHERE id=?",
+                    (access_token_enc, refresh_token_enc, scopes, expires_at, existing["id"]),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO oauth_credentials "
+                    "(account_id, provider, access_token_enc, refresh_token_enc, scopes, expires_at) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (account_id, provider, access_token_enc, refresh_token_enc, scopes, expires_at),
+                )
+        log.info("oauth credential upserted: %s/%s", account_id, provider)
+
+    def get_oauth_credential(self, account_id: str, provider: str) -> Optional[sqlite3.Row]:
+        return self._conn().execute(
+            "SELECT * FROM oauth_credentials WHERE account_id=? AND provider=? AND revoked=0",
+            (account_id, provider),
+        ).fetchone()
+
+    def list_oauth_credentials(self, provider: Optional[str] = None) -> list[sqlite3.Row]:
+        if provider:
+            return self._conn().execute(
+                "SELECT * FROM oauth_credentials WHERE provider=? ORDER BY updated_at DESC",
+                (provider,),
+            ).fetchall()
+        return self._conn().execute(
+            "SELECT * FROM oauth_credentials ORDER BY updated_at DESC"
+        ).fetchall()
+
+    def revoke_oauth_credential(self, account_id: str, provider: str) -> bool:
+        """Soft-revoke a credential (keeps the row for audit, flags revoked=1)."""
+        with self.transaction() as conn:
+            cur = conn.execute(
+                "UPDATE oauth_credentials SET revoked=1, updated_at=CURRENT_TIMESTAMP "
+                "WHERE account_id=? AND provider=?",
+                (account_id, provider),
+            )
+        return cur.rowcount > 0
+
+    def delete_oauth_credential(self, account_id: str, provider: str) -> bool:
+        with self.transaction() as conn:
+            cur = conn.execute(
+                "DELETE FROM oauth_credentials WHERE account_id=? AND provider=?",
+                (account_id, provider),
+            )
+        return cur.rowcount > 0
 
 
 def datetime_utc() -> str:

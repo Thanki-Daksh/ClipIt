@@ -33,6 +33,12 @@
 - **TSK-A01-09** `core/health.py` + `main.py serve`: FastAPI `GET /health` returns DB (journal, FKs, schema version, size), queue `by_status`, disk free%, and per-account storage usage. Verified over live HTTP on port 8899.
 - **Tests**: added `tests/test_storage.py`, `tests/test_requeue.py`, `tests/test_health.py`, `tests/test_workers.py`. Full suite: **78 passed** in ~20s.
 
+## 2026-08-08
+- **TSK-A01-10** `core/db.py`: added `oauth_credentials` table (SCHEMA_VERSION 2) — `provider` CHECK (youtube|instagram), `access_token_enc`/`refresh_token_enc` ciphertext columns, `UNIQUE(account_id, provider)`, `ON DELETE CASCADE` from accounts, `revoked` soft-delete flag + indexes; CRUD: `upsert_oauth_credential` / `get_oauth_credential` / `list_oauth_credentials` / `revoke_oauth_credential` / `delete_oauth_credential`.
+- **TSK-A01-11** `core/persistence.py` (new): `ConfigStore` — atomic (temp + `os.replace`) writers for `.env` (`set_api_key`/`unset_api_key`, CRLF preserved) and `config.json` (`set_setting`/`unset_setting`, merge-not-clobber); `CredentialCrypto` — Fernet seal/unseal for OAuth tokens, key auto-generated into `.env` as `CLIPIT_ENCRYPTION_KEY` (env override wins), invalid/placeholder keys rejected before write.
+- **CLI wiring** (`main.py`): `secret set-key|unset-key|show-key|set-setting|unset-setting|list` (masked reads `first4…last4`) + `oauth add|list|revoke` with `--account --provider --access-token --refresh-token --scopes --expires-at`; unknown account / bad provider rejected with exit 2.
+- **Tests**: added `tests/test_persistence.py` (12) + `tests/test_oauth_credentials.py` (11) — atomicity, CRLF preservation, dedupe upsert, soft-revoke, cascade delete, Fernet round-trip across instances, invalid-key rejection. Full suite **142 passed**, secret-sanitizer gate green.
+
 
 
 ### ⚙️ Recommended Model & Effort Configuration

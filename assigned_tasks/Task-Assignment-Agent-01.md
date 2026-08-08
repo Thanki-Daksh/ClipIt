@@ -27,3 +27,5 @@
 | **TSK-A01-07** | Account Storage Isolation | HIGH | [x] COMPLETED | Enforce storage/{account_id}/raw and /clips directory segregation |
 | **TSK-A01-08** | Crash Re-Queue Engine | HIGH | [x] COMPLETED | Reset stuck mid-stage jobs back to PENDING on restart |
 | **TSK-A01-09** | System Healthcheck REST API | MEDIUM | [x] COMPLETED | Implement GET /health returning DB, disk, and queue metrics |
+| **TSK-A01-10** | OAuth Credentials DB Schema | HIGH | [x] COMPLETED | Add credentials table for YouTube/Instagram OAuth tokens |
+| **TSK-A01-11** | API Keys & Configuration Persistence Engine | HIGH | [x] COMPLETED | Save and update API keys into config.json & .env safely |
