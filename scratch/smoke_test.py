@@ -82,9 +82,21 @@ after = db.get_job(j4)["status"]
 print("   job after recovery:", after, "(expect PENDING since no artifacts)")
 assert after == "PENDING"
 
-# 9. WAL + foreign keys check
+# 9. WAL + foreign keys + durability pragmas check
 conn = db._conn()
 print("9. journal_mode =", conn.execute("PRAGMA journal_mode;").fetchone()[0],
-      "| foreign_keys =", conn.execute("PRAGMA foreign_keys;").fetchone()[0])
+      "| foreign_keys =", conn.execute("PRAGMA foreign_keys;").fetchone()[0],
+      "| synchronous =", conn.execute("PRAGMA synchronous;").fetchone()[0],
+      "(expect wal | 1 | 2 = FULL)")
+assert conn.execute("PRAGMA journal_mode;").fetchone()[0] == "wal"
+assert conn.execute("PRAGMA foreign_keys;").fetchone()[0] == 1
+assert conn.execute("PRAGMA synchronous;").fetchone()[0] == 2
+
+# 10. integrity + orphan scan
+report = db.check_integrity()
+print("10. quick_check =", report["quick_check"],
+      "| orphan_clips =", report["orphan_clips_no_job"],
+      "+", report["orphan_clips_no_account"],
+      "(expect ok | 0 + 0)")
 
 print("\nALL SMOKE TESTS PASSED")

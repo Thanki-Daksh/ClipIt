@@ -154,9 +154,15 @@ def cmd_list(cfg: Config, db: Database, args) -> int:
     clips = db.list_clips()
     if clips:
         print(f"\nclipit> clips ({len(clips)}):")
-        for c in clips:
-            print(f"  {c['id']}  job={c['job_id']}  score={c['virality_score']:.2f}  "
-                  f"approved={c['approved']}  [{c['start_time']}..{c['end_time']}]  {c['title'] or ''}")
+        for raw_c in clips:
+            c = dict(raw_c) if hasattr(raw_c, 'keys') else raw_c
+            job_id = c.get('job_id', c.get('id', ''))
+            score = c.get('virality_score', 0) or 0
+            appr = c.get('approved', 0)
+            st = c.get('start_time', '')
+            et = c.get('end_time', '')
+            title = c.get('title') or c.get('source_title') or ''
+            print(f"  {c.get('id', '')}  job={job_id}  score={score:.2f}  approved={appr}  [{st}..{et}]  {title}")
     return 0
 
 
@@ -214,9 +220,15 @@ class Daemon:
         while not self._stop:
             try:
                 self.run_once()
-            except Exception as exc:
+            except Exception:
                 log.exception("daemon tick error")
             time.sleep(poll_secs)
+        # Graceful shutdown: fold the WAL back into the main DB file so the
+        # sidecar stays small and every committed row is in the durable file.
+        try:
+            self.db.checkpoint(mode="TRUNCATE")
+        except Exception:
+            log.exception("WAL checkpoint on shutdown failed")
         log.info("daemon stopped cleanly")
         return 0
 
@@ -431,7 +443,7 @@ def main(argv: list[str] | None = None) -> int:
         # Allow explicit DB override; bypass the path-traversal check's default root.
         cfg.resolved_db_path = Path(args.db).resolve()
 
-    db = Database(cfg.resolved_db_path)
+    db = Database(cfg.resolved_db_path, synchronous=cfg.db_synchronous)
     try:
         db.init_schema()
     except Exception as exc:

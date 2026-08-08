@@ -66,6 +66,9 @@ def build_health_payload(db: Optional[Database] = None,
                 "schema_version": conn.execute("PRAGMA user_version;").fetchone()[0],
                 "size_bytes": db.db_path.stat().st_size if db.db_path.exists() else None,
             })
+            # Live integrity probe: SQLite quick_check + orphaned-clip scan.
+            integrity = db.check_integrity(quick=True)
+            db_info.update(integrity)
         except Exception as exc:  # noqa: BLE001
             db_info["error"] = str(exc)
     payload["database"] = db_info

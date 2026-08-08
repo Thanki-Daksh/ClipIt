@@ -39,6 +39,14 @@
 - **CLI wiring** (`main.py`): `secret set-key|unset-key|show-key|set-setting|unset-setting|list` (masked reads `first4…last4`) + `oauth add|list|revoke` with `--account --provider --access-token --refresh-token --scopes --expires-at`; unknown account / bad provider rejected with exit 2.
 - **Tests**: added `tests/test_persistence.py` (12) + `tests/test_oauth_credentials.py` (11) — atomicity, CRLF preservation, dedupe upsert, soft-revoke, cascade delete, Fernet round-trip across instances, invalid-key rejection. Full suite **142 passed**, secret-sanitizer gate green.
 
+## 2026-08-08 (second session) — Production durability & schema audit
+- **Audited live `storage/clipit.db`**: WAL + user_version=2, integrity ok — BUT `synchronous=NORMAL` (loses last commits on power/battery kill — exactly the mission failure mode) and an OLD dev-era `clips` table (no `job_id`; 26 orphaned rows) hiding behind a current `user_version`.
+- **`core/db.py`**: default `PRAGMA synchronous=FULL` (env `CLIPIT_DB_SYNCHRONOUS` OFF|NORMAL|FULL|0/1/2, constructor arg wins); WAL-mode result verified at connect; `transaction()` raises a clear RuntimeError on nested use (was a silent deadlock); new `check_integrity()` (quick_check + orphan scan) and `checkpoint(mode="TRUNCATE")`.
+- **Legacy migration**: `init_schema` now detects schema drift by columns, not user_version; `_migrate` rebuilds pre-job_id `clips` in place inside one transaction (preserves owned rows with NULL `job_id`, drops orphaned 26 rows per ON DELETE CASCADE semantics, logged); `clips.job_id` relaxed to nullable; indexes recreated.
+- **`core/config.py`**: `db_synchronous` setting validated/normalized; `main.py`: `Database(..., synchronous=cfg.db_synchronous)` + WAL checkpoint on graceful daemon shutdown; **`core/health.py`**: `/health` now reports `quick_check` + orphan counts.
+- **Applied to the live DB**: SQLite-backup-API backup → `storage/backups/clipit-20260808-predurability.db`, migrated via the app path, purged confirmed orphans, checkpointed. Live DB now: synchronous=2, quick_check ok, 0 orphans.
+- **Tests**: `tests/test_db_durability.py` (19) — pragmas/env override, rollback atomicity, nested-tx guard, reopen durability, FK cascade, orphan detection, legacy migration (+idempotency, indexes). Full suite **160 passed**; smoke test #9 now also asserts `synchronous=2`.
+
 
 
 ### ⚙️ Recommended Model & Effort Configuration

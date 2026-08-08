@@ -54,7 +54,11 @@ _ENV_SETTING_MAP = {
     "database_path": "CLIPIT_DATABASE_PATH",
     "polling_interval_seconds": "CLIPIT_POLLING_INTERVAL_SECONDS",
     "max_daily_clips_per_account": "CLIPIT_MAX_DAILY_CLIPS_PER_ACCOUNT",
+    "db_synchronous": "CLIPIT_DB_SYNCHRONOUS",
 }
+
+# Valid PRAGMA synchronous values (numeric aliases included)
+_SYNC_VALUES = {"OFF": 0, "NORMAL": 1, "FULL": 2}
 
 
 class ConfigError(Exception):
@@ -71,6 +75,9 @@ class Config:
     database_path: str = "storage/clipit.db"
     polling_interval_seconds: int = 300
     max_daily_clips_per_account: int = 3
+    # COMMIT durability: OFF|NORMAL|FULL (0/1/2). FULL = fsynced WAL on every
+    # commit — zero data loss across power loss / OS battery kill.
+    db_synchronous: str = "FULL"
     # resolved absolute path (set after load)
     resolved_db_path: Path = field(default_factory=lambda: PROJECT_ROOT / "storage" / "clipit.db")
 
@@ -213,6 +220,17 @@ def load_config(
     except (TypeError, ValueError):
         errors.append(
             f"max_daily_clips_per_account must be an integer, got '{cfg.max_daily_clips_per_account}'"
+        )
+
+    # db_synchronous (COMMIT durability: OFF|NORMAL|FULL)
+    raw_sync = str(cfg.db_synchronous).strip().upper()
+    if raw_sync in ("0", "1", "2"):
+        cfg.db_synchronous = {0: "OFF", 1: "NORMAL", 2: "FULL"}[int(raw_sync)]
+    elif raw_sync in _SYNC_VALUES:
+        cfg.db_synchronous = raw_sync
+    else:
+        errors.append(
+            f"db_synchronous must be OFF|NORMAL|FULL (or 0|1|2), got '{cfg.db_synchronous}'"
         )
 
     # API keys: at least one provider must be configured for daemon operation
