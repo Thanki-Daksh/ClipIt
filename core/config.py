@@ -173,14 +173,18 @@ def load_config(
 
     cfg = Config()
 
-    # --- API keys: config.json < .env < process env -----------------------
+    # --- API keys: config.json < .env < process env (lowest→highest) ------
     for field_name, env_name in _ENV_KEY_MAP.items():
-        value = file_cfg.get(field_name, "") or env_cfg.get(env_name, "") or os.environ.get(env_name, "")
+        value = (os.environ.get(env_name, "")
+                 or env_cfg.get(env_name, "")
+                 or file_cfg.get(field_name, ""))
         setattr(cfg, field_name, str(value).strip())
 
-    # --- Runtime settings ---------------------------------------------------
+    # --- Runtime settings -------------------------------------------------
     for field_name, env_name in _ENV_SETTING_MAP.items():
-        value = file_cfg.get(field_name) or env_cfg.get(env_name) or os.environ.get(env_name)
+        value = (os.environ.get(env_name)
+                 or env_cfg.get(env_name)
+                 or file_cfg.get(field_name))
         if value is not None and str(value).strip():
             setattr(cfg, field_name, str(value).strip())
 

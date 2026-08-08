@@ -350,12 +350,12 @@ class SubtitleRenderer:
                 check=False,
                 timeout=timeout if timeout is not None else self.timeout,
             )
-        except subprocess.TimeoutExpired as exc:
+        except subprocess.TimeoutExpired:
             limit = timeout if timeout is not None else self.timeout
             logger.error("Subtitle burn timed out after %ss (process terminated)", limit)
             raise RuntimeError(
-                f"Subtitle burn-in timed out after {limit}s — child process "
-                f"was terminated (exit {exc.returncode})"
+                f"Subtitle burn-in timed out after {limit}s — the hung child "
+                f"process was terminated."
             )
         if result.returncode != 0:
             err = result.stderr.decode("utf-8", errors="replace")

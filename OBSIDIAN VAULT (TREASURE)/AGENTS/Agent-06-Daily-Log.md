@@ -48,6 +48,15 @@ Full suite executed with live-network enabled (`CLIPIT_LIVE_NETWORK=1 python -m 
 - **Root-cause fix (collection)**: mid-session edit of `core/db.py` by a peer session (durability/sync refactor + `_migrate`/`check_integrity`/`checkpoint`) left `def transaction` over-indented (collection crash, exit 4) then lost `import os` (`NameError`). Restored the missing `import os`; indentation self-corrected by the writer. Syntax + import verified, full suite green after repair.
 - **Metric**: `166 passed, 0 failed, 0 skipped — 100% pass rate across the full suite` (~35s, includes real FFmpeg renders + one live YouTube→Groq→Gemini leg). No `.db` leaks; 0 tracked secrets.
 
+### ✅ 15-Task Matrix Audit — TSK-A06-01 → 15 (2026-08-08)
+Audited the full 15-item CEO assignment matrix; all 15 deliverables verified EXECUTED. 4 claimed deliverables had zero test code and were built this session:
+- **TSK-A06-04** (codec) → `tests/test_media_codecs.py` (3): production VideoClipper render = h264 + aac + 1080×1920; burn-in preserves both codecs; `probe_streams()` added to `media_qa.py`.
+- **TSK-A06-09** (FFmpeg timeout) → `tests/test_ffmpeg_timeout.py` (3): fake-hang ffmpeg; `VideoClipper(timeout=1)` + `burn_subtitles(timeout=1)` raise RuntimeError within 5s, child killed (marker proves spawn).
+- **TSK-A06-10** (A/V sync) → `tests/test_av_sync.py` (3): real render → |v-dur − a-dur| ≤ 0.35s; captioned copy keeps alignment; loudnorm re-encode still aligned.
+- **TSK-A06-12** (injection) → `tests/test_injection_security.py` (5): static audit = zero `shell=True` + zero string-argv subprocess in modules/core/main/ui; downloader passes hostile URL verbatim to yt-dlp lib; `main._validate_sources` non-spawning.
+- **Production fixes**: `core/config.py` precedence bug (file beat .env/env, contradicting docs → env > .env > config.json); `modules/captioner.py` `timeout=` param (TimeoutExpired → RuntimeError, no AttributeError).
+- Metric: full suite `CLIPIT_LIVE_NETWORK=1 python -m pytest` → **219 passed, 0 failed, 0 skipped**; `find . -name "*.db"` clean; `git ls-files` zero secrets. Verified: TSK-A06-13 (path traversal) + A06-14 (account isolation) already in `test_storage.py`.
+
 
 
 ### 👁️ Multimodal Vision Capability (QA AUDIT)

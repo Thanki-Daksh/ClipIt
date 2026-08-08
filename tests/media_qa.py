@@ -127,3 +127,23 @@ def extract_keyframe(ffmpeg: str, video_path: Path, out_png: Path,
         "-frames:v", "1", "-q:v", "2", str(out_png),
     ])
     return rc == 0 and out_png.exists() and out_png.stat().st_size > 0
+
+
+def probe_streams(ffprobe: str, media_path: Path) -> list[dict]:
+    """
+    Return per-stream ffprobe info: codec_type, codec_name, width, height,
+    duration, start_time. Used for h264/aac codec sanity (TSK-A06-04) and
+    audio/video sync checks (TSK-A06-10).
+    """
+    import json
+    rc, out, _ = run_ffmpeg(ffprobe, [
+        "-v", "error", "-show_entries",
+        "stream=index,codec_type,codec_name,width,height,duration,start_time",
+        "-of", "json", str(media_path),
+    ])
+    if rc != 0:
+        return []
+    try:
+        return (json.loads(out).get("streams") or [])
+    except json.JSONDecodeError:
+        return []
