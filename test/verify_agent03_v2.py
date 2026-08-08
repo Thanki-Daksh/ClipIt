@@ -59,7 +59,7 @@ try:
     check("reject unknown preset", False)
 except ValueError:
     check("reject unknown preset", True)
-check("presets exported", list(ASS_PRESETS) == ["VIRAL_YELLOW", "MINIMAL_WHITE", "NEON_CYAN"])
+check("presets exported", list(ASS_PRESETS) == ["VIRAL_YELLOW", "TIKTOK_YELLOW", "MINIMAL_WHITE", "CLEAN_WHITE", "NEON_CYAN"])
 
 # ---- TSK-A03-06: dual-pass render engine -----------------------------------
 V = os.path.join(ROOT, "test", "raw_16x9.mp4")
@@ -88,12 +88,12 @@ check("face crop even + in bounds",
 fw2 = clipper.face_crop_window((0, 500, 50, 50), 1920, 1080)
 check("face crop clamps left edge", fw2.x == 0, f"{fw2}")
 
-# ---- TSK-A03-08: loudnorm ----------------------------------------------------
+# ---- TSK-A03-09: loudnorm (-14 LUFS mobile-speaker spec) ----------------
 r_n = clipper.cut_clip(V, 1.0, 8.0, os.path.join(OUT, "clip_norm.mp4"),
                        encoder="libx264", audio_loudnorm=True,
-                       loudness_i=-16.0, loudness_tp=-1.5, loudness_lra=11.0)
+                       loudness_i=-14.0, loudness_tp=-1.5, loudness_lra=11.0)
 I = loudness_i(r_n.output_path)
-check("loudnorm applied", r_n.audio_normalized and I is not None and abs(I - (-16.0)) < 0.8, f"I={I} LUFS")
+check("loudnorm applied", r_n.audio_normalized and I is not None and abs(I - (-14.0)) < 0.8, f"I={I} LUFS")
 
 # ---- combined: face crop + loudnorm + auto encoder ----------------------------
 r2 = clipper.cut_clip(V, 2.0, 9.0, os.path.join(OUT, "clip_face_norm.mp4"),

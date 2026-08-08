@@ -2,12 +2,16 @@
 modules/clipper.py - FFmpeg 9:16 Vertical Crop Engine for ClipIt.
 
 Cuts landscape (16:9) video into vertical 9:16 shorts at 1080x1920.
-Supports two crop strategies:
+Supports four crop/layout strategies:
     * center   - Smart center-crop a 9:16 window from the middle of the frame.
     * blur     - Stacked blurred-background padding (landscape fits centered).
+    * pad      - Auto-pad to 9:16 without stretching (TSK-A03-14).
 Plus optional speaker-face auto-crop (dynamic 9:16 window centered on a
 face bounding box), a dual-pass render engine (h264_nvenc with libx264
-automatic fallback), and FFmpeg loudnorm audio normalisation.
+automatic fallback), FFmpeg loudnorm audio normalisation (-14 LUFS mobile
+spec), dynamic bottom-right watermark overlay, auto color-grading presets,
+a minterpolate 60fps motion-blur doubler, 1080x1920 poster-frame thumbnail
+extraction, and a 120s hard timeout guard on every FFmpeg process.
 
 Owned by Agent 03 (Media & Graphics Engineer). Do not edit by other agents.
 """
@@ -30,11 +34,21 @@ TARGET_HEIGHT = 1920
 TARGET_AR = TARGET_WIDTH / TARGET_HEIGHT     # 9/16 target height/width ratio
 MIN_CLIP_SECONDS = 5.0          # Reject clips shorter than 5s (spec edge case).
 MIN_FREE_MB = 500                # Abort render if free disk < 500MB.
+RENDER_TIMEOUT = 120             # TSK-A03-15: hard cap on every FFmpeg render process.
+WATERMARK_MARGIN = 36            # Bottom-right logo inset (px) for TSK-A03-08.
 
-# Broadcast loudness targets (EBU R128 style).
-LOUDNESS_I = -16.0
+# Broadcast loudness targets (EBU R128 style) - mobile-speaker friendly.
+LOUDNESS_I = -14.0               # TSK-A03-09: -14 LUFS integrated for mobile.
 LOUDNESS_TP = -1.5
 LOUDNESS_LRA = 11.0
+
+# Auto color-grading presets (TSK-A03-13) - mobile-display friendly.
+COLOR_PRESETS = {
+    "vivid": "eq=contrast=1.12:saturation=1.28:brightness=0.01",
+    "punch": "eq=contrast=1.18:saturation=1.4:brightness=0.015",
+    "cinematic": "eq=contrast=1.06:saturation=0.92:gamma=0.96",
+    "warm": "eq=contrast=1.08:saturation=1.12:gamma=1.02:colorbalance=rs=0.04:bs=-0.03",
+}
 
 
 @dataclass(frozen=True)
@@ -79,10 +93,12 @@ class VideoClipper:
         ffmpeg: str = "ffmpeg",
         ffprobe: str = "ffprobe",
         prefer_nvenc: bool = True,
+        timeout: int = RENDER_TIMEOUT,
     ) -> None:
         self.ffmpeg = ffmpeg
         self.ffprobe = ffprobe
         self.prefer_nvenc = prefer_nvenc
+        self.timeout = timeout          # TSK-A03-15: 120s render cap.
         self._ensure_tools()
 
     def _ensure_tools(self) -> None:
@@ -150,9 +166,14 @@ class VideoClipper:
         loudness_tp: float = LOUDNESS_TP,
         loudness_lra: float = LOUDNESS_LRA,
         preset: str = "fast",
-        crf: int = 22,
+        crf: int = 23,
         quality: int = 23,               # NVENC constant-quality (CQ)
         audio_bitrate: str = "192k",
+        watermark_path: Optional[str] = None,
+        watermark_scale: float = 0.12,
+        smooth_60fps: bool = False,
+        minterpolate_mode: str = "mci",
+        color_grade: Optional[str] = None,
     ) -> ClipRenderResult:
         """
         Cut a 9:16 vertical clip from a landscape source.
@@ -162,20 +183,30 @@ class VideoClipper:
             start_time:  Clip start (seconds).
             end_time:    Clip end (seconds).
             output_path: Destination .mp4 path.
-            crop_mode:   'center' (default) or 'blur'.
+            crop_mode:   'center' (default), 'blur', or 'pad' (auto-pad
+                         9:16 without stretching, TSK-A03-14).
             face_bbox:   Optional (x, y, w, h) face bounding box in source
                          pixels -> dynamic 9:16 window centered on the face.
             encoder:     'auto' (h264_nvenc w/ libx264 fallback), 'nvenc',
                          or 'libx264'.
-            audio_loudnorm: apply EBU R128 loudnorm to bring audio to
-                            broadcast level (re-encodes audio as AAC).
-            quality/encoder codes: quality tuning.
+            audio_loudnorm: apply EBU R128 loudnorm (default target -14 LUFS,
+                            mobile-speaker spec, TSK-A03-09).
+            watermark_path: optional logo image -> burned bottom-right
+                            (TSK-A03-08 dynamic watermark overlay).
+            watermark_scale: logo width as a fraction of 1080 (default 0.12).
+            smooth_60fps:    enable minterpolate motion blur + 60fps doubler
+                             (TSK-A03-12).
+            minterpolate_mode: 'mci' (motion-compensated, slow HQ) or
+                               'blend' (fast). Default 'mci'.
+            color_grade:   optional grading preset name (TSK-A03-13):
+                           'vivid', 'punch', 'cinematic', 'warm'.
 
         Returns a ClipRenderResult.
 
         Raises:
             ValueError:   Invalid timestamps / clip < 5s.
-            RuntimeError: All encoder attempts fail or output is off-spec.
+            RuntimeError: All encoder attempts fail, output is off-spec,
+                          or a render exceeds the timeout guard (TSK-A03-15).
         """
         self._validate_clip(raw_video, start_time, end_time, output_path)
         self._check_disk_space(output_path)
@@ -220,6 +251,11 @@ class VideoClipper:
                 quality=quality,
                 audio_bitrate=audio_bitrate,
                 audio_filter=audio_filter,
+                watermark_path=watermark_path,
+                watermark_scale=watermark_scale,
+                smooth_60fps=smooth_60fps,
+                color_grade=color_grade,
+                minterpolate_mode=minterpolate_mode,
             )
             logger.info(
                 "Rendering 9:16 clip mode=%s encoder=%s start=%.2f end=%.2f -> %s",
@@ -259,6 +295,47 @@ class VideoClipper:
             crop_window=crop_window,
             ffmpeg_cmd=cmd,
         )
+
+    def extract_thumbnail(
+        self,
+        video_path: str,
+        output_png: str,
+        at_time: float = 1.0,
+    ) -> str:
+        """
+        TSK-A03-10: extract a 1080x1920 poster-frame PNG thumbnail.
+
+        The frame is scaled with force_original_aspect_ratio=increase and
+        center-cropped so the poster is always exactly 1080x1920 regardless
+        of the clip's content AR.
+
+        Returns the output PNG path.
+        """
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"Video not found for thumbnail: {video_path}")
+        os.makedirs(os.path.dirname(os.path.abspath(output_png)) or ".", exist_ok=True)
+
+        cmd = [
+            self.ffmpeg, "-y",
+            "-ss", f"{max(0.0, float(at_time)):.3f}",
+            "-i", video_path,
+            "-vf",
+            f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=increase,"
+            f"crop={TARGET_WIDTH}:{TARGET_HEIGHT}",
+            "-frames:v", "1",
+            "-q:v", "2",
+            output_png,
+        ]
+        self._run(cmd)
+
+        w, h, _ = self._probe(output_png)
+        if (w, h) != (TARGET_WIDTH, TARGET_HEIGHT):
+            raise RuntimeError(
+                f"Thumbnail rendered at {w}x{h}, expected "
+                f"{TARGET_WIDTH}x{TARGET_HEIGHT}."
+            )
+        logger.info("Extracted thumbnail (1080x1920): %s", output_png)
+        return output_png
 
     def _encoder_candidates(self, encoder: str) -> List[str]:
         """Return ordered encoder candidates for a request, GPU-first."""
@@ -326,64 +403,117 @@ class VideoClipper:
         crop_mode: str, crop_window: Optional[CropWindow],
         encoder: str, preset: str, crf: int, quality: int,
         audio_bitrate: str, audio_filter: Optional[str],
+        watermark_path: Optional[str] = None,
+        watermark_scale: float = 0.12,
+        smooth_60fps: bool = False,
+        color_grade: Optional[str] = None,
+        minterpolate_mode: str = "mci",
     ) -> List[str]:
-        """Assemble the FFmpeg invocation for either crop strategy."""
-        duration = end - start
+        """Assemble the FFmpeg invocation for the requested render.
 
+        Crop strategies: 'center'/'face' (smart crop), 'blur' (stacked
+        blurred background), 'pad' (auto-pad 9:16 without stretching,
+        TSK-A03-14). Optional chained extras: color grading (TSK-A03-13),
+        minterpolate 60fps motion-blur doubler (TSK-A03-12), and a
+        bottom-right watermark overlay (TSK-A03-08).
+        """
+        duration = end - start
+        has_watermark = bool(watermark_path)
+
+        cmd = [
+            self.ffmpeg, "-y",
+            "-ss", f"{start:.3f}",
+            "-i", raw_video,
+        ]
+        if has_watermark:
+            if not os.path.exists(watermark_path):
+                raise FileNotFoundError(f"Watermark image not found: {watermark_path}")
+            cmd += ["-i", watermark_path]
+        cmd += ["-to", f"{duration:.3f}"]
+
+        # 1) Main video chain: (filter, in_labels, out_label) segments.
+        segs: List[Tuple[str, str, str]] = []
         if crop_mode == "blur":
-            vf, out_mapping, is_complex = self._blur_filter(crop_window)
+            segs.append((
+                f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=increase,"
+                f"boxblur=25:5,crop={TARGET_WIDTH}:{TARGET_HEIGHT}",
+                "[0:v]", "[bg]",
+            ))
+            segs.append(("scale=1080:-1", "[0:v]", "[fg]"))
+            segs.append(("overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2", "[bg][fg]", "[vmain]"))
+        elif crop_mode == "pad":
+            # TSK-A03-14: fit inside 1080x1920, then pad to exact 9:16 - no stretching.
+            segs.append((
+                f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=decrease,"
+                f"pad={TARGET_WIDTH}:{TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black",
+                "[0:v]", "[vmain]",
+            ))
         else:
-            vf, out_mapping, is_complex = self._center_filter(crop_window)
+            if crop_window is not None:
+                crop = (
+                    f"crop={crop_window.w}:{crop_window.h}:{crop_window.x}:{crop_window.y},"
+                    f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}"
+                )
+            else:
+                crop = f"crop=ih*({TARGET_AR:.6f}):ih,scale={TARGET_WIDTH}:{TARGET_HEIGHT}"
+            segs.append((crop, "[0:v]", "[vmain]"))
+
+        # 2) Optional color grading (TSK-A03-13) + 60fps doubler (TSK-A03-12).
+        extra: List[str] = []
+        grade_filter = None
+        if color_grade:
+            grade_filter = COLOR_PRESETS.get(str(color_grade).strip().lower())
+            if grade_filter is None:
+                raise ValueError(
+                    f"Unknown color grade '{color_grade}'. "
+                    f"Available: {', '.join(sorted(COLOR_PRESETS))}"
+                )
+            extra.append(grade_filter)
+        if smooth_60fps:
+            extra.append(f"minterpolate=fps=60:mi_mode={minterpolate_mode}")
+        if extra:
+            segs.append((",".join(extra), "[vmain]", "[vgraded]"))
+            video_in = "[vgraded]"
+        else:
+            video_in = "[vmain]"
+
+        # 3) Watermark overlay, bottom-right corner (TSK-A03-08).
+        out_label = video_in
+        if has_watermark:
+            logo_w = max(24, int(TARGET_WIDTH * watermark_scale))
+            segs.append((f"scale={logo_w}:-1", "[1:v]", "[logo]"))
+            segs.append((
+                f"overlay=main_w-overlay_w-{WATERMARK_MARGIN}:main_h-overlay_h-{WATERMARK_MARGIN}",
+                f"{video_in}[logo]", "[vout]",
+            ))
+            out_label = "[vout]"
+
+        is_complex = crop_mode == "blur" or has_watermark or len(segs) > 1
+        if is_complex:
+            vf = ";".join(f"{in_l}{filt}{out_l}" for filt, in_l, out_l in segs)
+            cmd += ["-filter_complex", vf]
+            cmd += ["-map", out_label, "-map", "0:a?"]
+        else:
+            # Single plain chain - simple -vf (keeps legacy command shape).
+            cmd += ["-vf", segs[0][0]]
+            # No explicit video -map: default mapping keeps the filtered
+            # video plus all audio. (Do NOT add `-map 0:a?` here - it would
+            # drop video.)
 
         codec_args = self._codec_args(
             encoder=encoder, preset=preset, crf=crf, quality=quality
         )
-
         audio_args: List[str] = []
         if audio_filter:
             audio_args = ["-af", audio_filter, "-c:a", "aac", "-b:a", audio_bitrate]
         else:
             audio_args = ["-c:a", "aac", "-b:a", audio_bitrate]
 
-        cmd = [
-            self.ffmpeg, "-y",
-            "-ss", f"{start:.3f}",
-            "-i", raw_video,
-            "-to", f"{duration:.3f}",
-        ]
-        if is_complex:
-            cmd += ["-filter_complex", vf]
-        else:
-            cmd += ["-vf", vf]
-        cmd += out_mapping
         cmd += list(codec_args)
         cmd += audio_args
         cmd += ["-pix_fmt", "yuv420p", "-avoid_negative_ts", "make_zero"]
         cmd += [output_path]
         return cmd
-
-    def _center_filter(self, crop_window: Optional[CropWindow]):
-        """Smart center crop (or face-crop) filter, then scale/fill 9:16."""
-        if crop_window is not None:
-            vf = (
-                f"crop={crop_window.w}:{crop_window.h}:{crop_window.x}:{crop_window.y},"
-                f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}"
-            )
-        else:
-            vf = f"crop=ih*({TARGET_AR:.6f}):ih,scale={TARGET_WIDTH}:{TARGET_HEIGHT}"
-        # No explicit video -map: default mapping keeps the filtered video
-        # plus all audio. (Do NOT add `-map 0:a?` here - it would drop video.)
-        return vf, [], False
-
-    def _blur_filter(self, crop_window: Optional[CropWindow]):
-        """Stacked blurred background with sharp foreground overlay centered."""
-        filter_complex = (
-            "[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-            "boxblur=25:5,crop={w}:{h}[bg];"
-            "[0:v]scale=1080:-1[fg];"
-            "[bg][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2[v]"
-        ).format(w=TARGET_WIDTH, h=TARGET_HEIGHT)
-        return filter_complex, ["-map", "[v]", "-map", "0:a?"], True
 
     def _codec_args(
         self,
@@ -438,10 +568,23 @@ class VideoClipper:
         return self._probe(video_path)
 
     def _run(self, cmd: List[str]) -> str:
-        """Execute FFmpeg non-blocking; surface stderr on failure."""
-        result = subprocess.run(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-        )
+        """Execute FFmpeg non-blocking; surface stderr on failure.
+
+        TSK-A03-15: every FFmpeg process runs under a hard timeout cap
+        (default 120s). A hung filter graph kills the render fast instead
+        of wedging the worker.
+        """
+        try:
+            result = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                check=False, timeout=self.timeout,
+            )
+        except subprocess.TimeoutExpired:
+            logger.error("FFmpeg render exceeded %ds timeout: %s", self.timeout, cmd[0])
+            raise RuntimeError(
+                f"FFmpeg render timed out after {self.timeout}s (TSK-A03-15 guard). "
+                f"Command: {os.path.basename(cmd[0])} ..."
+            )
         if result.returncode != 0:
             err = result.stderr.decode("utf-8", errors="replace")
             logger.error("FFmpeg failed for %s\n%s", cmd[0], err)

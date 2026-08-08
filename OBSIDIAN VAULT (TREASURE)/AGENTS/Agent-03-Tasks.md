@@ -16,9 +16,16 @@
 - [x] Add 3 ASS style presets (VIRAL_YELLOW / MINIMAL_WHITE / NEON_CYAN) — VERIFIED
 - [x] Dual-pass render engine (h264_nvenc + libx264 fallback) — VERIFIED functional probe
 - [x] Speaker face auto-crop math — VERIFIED face-centered 9:16 window
-- [x] Audio loudness normalizer (loudnorm) — VERIFIED -16.0 LUFS output
+- [x] Audio loudness normalizer (loudnorm) — VERIFIED -14.0 LUFS output (mobile-speaker spec)
 - [x] Real FFmpeg 9:16 crop + ASS subtitle burn-in — VERIFIED `test/e2e_agent03.py` ALL CHECKS PASSED
 - [x] Shorts & Reels metadata + hashtag packaging — VERIFIED post_shorts.json + post_reels.json
+- [x] Dynamic watermark & overlay generator — VERIFIED bottom-right pixel diff (TSK-A03-08)
+- [x] High-res thumbnail generator — VERIFIED 1080x1920 poster PNG (TSK-A03-10)
+- [x] ASS font fallback engine — VERIFIED Montserrat/Inter/Arial auto-resolve (TSK-A03-11)
+- [x] Motion blur & 60fps doubler (minterpolate) — VERIFIED fps=60 output (TSK-A03-12)
+- [x] Auto color-grading presets — VERIFIED vivid/punch/cinematic/warm (TSK-A03-13)
+- [x] Aspect-ratio auto-pad — VERIFIED 1080x1920 without stretching (TSK-A03-14)
+- [x] FFmpeg 120s timeout guard — VERIFIED functional kill + burn-in guard (TSK-A03-15)
 
 
 

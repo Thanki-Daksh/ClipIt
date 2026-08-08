@@ -31,6 +31,20 @@
 - **REG VERSION**: `verify_agent03` **7/7**, `verify_agent03_v2` **16/16**, `pytest e2e_agent03 + test_subtitle_render` **8/8** — all green.
 - **TASK MATRIX**: Vault copy of `Task-Assignment-Agent-03.md` synced from PENDING to **[x] COMPLETED × 10** (repo copy already committed COMPLETED in e1710c3).
 
+## 2026-08-08 (SESSION 2 — 15-TASK MATRIX EXECUTION)
+- **MATRIX UPGRADED TO 15 TASKS** (TSK-A03-01..15) by CEO in `assigned_tasks/Task-Assignment-Agent-03.md`. Tasks 01-07 already held; **08, 10-15 were NOT implemented** despite COMPLETED claims — implemented, verified, and logged in this session. Nothing marked COMPLETED without a real render behind it.
+- **TSK-A03-08 WATERMARK**: `cut_clip(watermark_path=..., watermark_scale=0.12)` — logo input scaled + `overlay=main_w-overlay_w-36:main_h-overlay_h-36` bottom-right, complex filter graph with `-map 0:a?`. Verified: watermarked vs plain render bottom-right crop MD5 `32b62c96` vs `0ebb2906` (DIFFER = burned).
+- **TSK-A03-09 LOUDNORM -14 LUFS**: `LOUDNESS_I` default changed -16.0 → **-14.0** (mobile-speaker spec). Verified measured I = **-14.0 LUFS** via ebur128.
+- **TSK-A03-10 THUMBNAIL**: new `VideoClipper.extract_thumbnail(video, png, at_time)` — `scale=force_original_aspect_ratio=increase,crop=1080:1920` poster frame. Verified 1080x1920 PNG extracted.
+- **TSK-A03-11 FONT FALLBACK**: `captioner.py` — `available_fonts()` scans C:/Windows/Fonts (+unix/mac dirs); `resolve_font()` picks Montserrat ExtraBold → Montserrat → Inter → Arial from installed families; wired into `ASSSubtitleGenerator.__init__` (preset + custom paths). This host: 352 font files scanned, resolves Arial. Aired with spec-era preset aliases TIKTOK_YELLOW + CLEAN_WHITE.
+- **TSK-A03-12 MINTERPOLATE 60FPS**: `cut_clip(smooth_60fps=True, minterpolate_mode='mci'|'blend')` appends `minterpolate=fps=60:mi_mode=...`. Verified blend render outputs **fps=60.00** at 1080x1920.
+- **TSK-A03-13 COLOR GRADING**: `COLOR_PRESETS` (vivid/punch/cinematic/warm) via `cut_clip(color_grade=...)`; unknown grade raises ValueError. `eq=` filters verified in render chain.
+- **TSK-A03-14 AUTO-PAD**: `crop_mode='pad'` — `scale=force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2` (no stretching). Verified 1080x1920.
+- **TSK-A03-15 TIMEOUT GUARD**: `RENDER_TIMEOUT=120` enforced via `subprocess.run(timeout=...)` in `VideoClipper._run` and `SubtitleRenderer.burn_subtitles` (honors per-call override). Verified functionally: `VideoClipper(timeout=1)` on a slow chain raises RuntimeError "timed out after 1s".
+- **NEW TEST**: `test/verify_agent03_v3.py` => **18/18 PASSED** (real renders: pad+grade+60fps, loudnorm -14, watermark MD5, thumbnail, timeout kill). Regression: verify_agent03 **7/7**, verify_agent03_v2 **16/16** (updated: loudness -16→-14, presets list +aliases), `pytest e2e_agent03 + test_subtitle_render` **8/8**.
+- **NOTE**: `core/config.py` (Agent 01/06 WIP, NOT mine) was mid-edit broken (IndentationError) during this session, breaking full-suite pytest collection — my modules/tests do not import it; all agent-03 suites green regardless.
+- **MATRIX SYNC**: vault copy rewritten to the 15-task table, all **[x] COMPLETED**, new row layout (the prior copy had a broken 10-row `|||` table).
+
 
 
 ### 👁️ Multimodal Vision Capability (PRIMARY)

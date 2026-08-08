@@ -46,6 +46,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 # ---- Built-in style presets ------------------------------------------- #
 # Each preset maps a name to (primary, secondary/highlight, outline, back,
 # font_name, font_size). Secondary colour is the active-word highlight.
+# Spec-era aliases: TIKTOK_YELLOW == VIRAL_YELLOW, CLEAN_WHITE == MINIMAL_WHITE.
 ASS_PRESETS = {
     "VIRAL_YELLOW": {
         "primary": ASS_WHITE,
@@ -55,7 +56,23 @@ ASS_PRESETS = {
         "font_name": "Montserrat ExtraBold",
         "font_size": 64,
     },
+    "TIKTOK_YELLOW": {
+        "primary": ASS_WHITE,
+        "highlight": ASS_YELLOW,
+        "outline": ASS_BLACK_OUTLINE,
+        "back": ASS_DARK_BACK,
+        "font_name": "Montserrat ExtraBold",
+        "font_size": 64,
+    },
     "MINIMAL_WHITE": {
+        "primary": ASS_WHITE,
+        "highlight": ASS_WHITE,
+        "outline": "&H00333333",
+        "back": "&H00000000",
+        "font_name": "Arial",
+        "font_size": 56,
+    },
+    "CLEAN_WHITE": {
         "primary": ASS_WHITE,
         "highlight": ASS_WHITE,
         "outline": "&H00333333",
@@ -72,6 +89,18 @@ ASS_PRESETS = {
         "font_size": 68,
     },
 }
+
+# ---- Font fallback engine (TSK-A03-11) -------------------------------- #
+# libass falls back to an OS default when a named font is missing, which
+# silently changes the look. We probe common system font dirs and pick the
+# first installed family: Montserrat ExtraBold -> Montserrat -> Inter -> Arial.
+FONT_DIRS = [
+    r"C:\Windows\Fonts",
+    "/usr/share/fonts",
+    "/usr/local/share/fonts",
+    "/System/Library/Fonts",
+]
+FONT_FALLBACK_CHAIN = ["Montserrat ExtraBold", "Montserrat", "Inter", "Arial"]
 
 
 class ASSSubtitleGenerator:
@@ -96,7 +125,7 @@ class ASSSubtitleGenerator:
                     f"Available: {', '.join(ASS_PRESETS)}"
                 )
             self.preset_name = str(preset).upper()
-            self.font_name = spec["font_name"]
+            self.font_name = self.resolve_font(spec["font_name"])
             self.font_size = spec["font_size"]
             self.primary = spec["primary"]
             self.highlight = spec["highlight"]
@@ -104,12 +133,50 @@ class ASSSubtitleGenerator:
             self.back = spec["back"]
         else:
             self.preset_name = None
-            self.font_name = font_name
+            self.font_name = self.resolve_font(font_name)
             self.font_size = font_size
             self.primary = ASS_WHITE
             self.highlight = ASS_YELLOW
             self.outline = ASS_BLACK_OUTLINE
             self.back = ASS_DARK_BACK
+        logger.info(
+            "Subtitle style ready: preset=%s font=%s (fallback-resolved)",
+            self.preset_name or "custom", self.font_name,
+        )
+
+    # ------------------------------------------------------------------
+    # Font fallback engine (TSK-A03-11)
+    # ------------------------------------------------------------------
+    @classmethod
+    def available_fonts(cls) -> set:
+        """Return the set of lowercased font file stems installed on the host."""
+        stems: set = set()
+        for d in FONT_DIRS:
+            if not os.path.isdir(d):
+                continue
+            try:
+                for name in os.listdir(d):
+                    low = name.lower()
+                    if low.endswith((".ttf", ".otf", ".ttc")):
+                        stems.add(os.path.splitext(name)[0].lower())
+            except OSError:
+                continue
+        return stems
+
+    @classmethod
+    def resolve_font(cls, preferred: str = "Montserrat ExtraBold") -> str:
+        """
+        Pick the first installed font family from the fallback chain,
+        preferring the requested family. Never returns a missing font:
+        guaranteed terminal fallback is 'Arial' (universally installed).
+        """
+        avail = cls.available_fonts()
+        if avail:
+            for cand in [preferred, *FONT_FALLBACK_CHAIN]:
+                stem = cand.split()[0].lower()
+                if any(stem in name for name in avail):
+                    return cand
+        return "Arial"
 
     def generate_ass(
         self,
@@ -220,9 +287,15 @@ class SubtitleRenderer:
     audio sync drift.
     """
 
-    def __init__(self, ffmpeg: str = "ffmpeg", ffprobe: str = "ffprobe") -> None:
+    def __init__(
+        self,
+        ffmpeg: str = "ffmpeg",
+        ffprobe: str = "ffprobe",
+        timeout: int = 120,
+    ) -> None:
         self.ffmpeg = ffmpeg
         self.ffprobe = ffprobe
+        self.timeout = timeout        # TSK-A03-15: hard cap on burn-in renders.
 
     def burn_subtitles(
         self,
@@ -232,6 +305,7 @@ class SubtitleRenderer:
         crf: int = 20,
         preset: str = "fast",
         delete_intermediate: bool = False,
+        timeout: Optional[float] = None,  # seconds; hung FFmpeg burn is killed (TSK-A06-09)
     ) -> str:
         """
         Burn ASS subtitles into the video.
@@ -270,9 +344,19 @@ class SubtitleRenderer:
         ]
 
         logger.info("Burning subtitles %s -> %s", os.path.basename(ass_path), output_path)
-        result = subprocess.run(
-            cmd, cwd=ass_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-        )
+        try:
+            result = subprocess.run(
+                cmd, cwd=ass_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                check=False,
+                timeout=timeout if timeout is not None else self.timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            limit = timeout if timeout is not None else self.timeout
+            logger.error("Subtitle burn timed out after %ss (process terminated)", limit)
+            raise RuntimeError(
+                f"Subtitle burn-in timed out after {limit}s — child process "
+                f"was terminated (exit {exc.returncode})"
+            )
         if result.returncode != 0:
             err = result.stderr.decode("utf-8", errors="replace")
             logger.error("Subtitle burn-in failed:\n%s", err)

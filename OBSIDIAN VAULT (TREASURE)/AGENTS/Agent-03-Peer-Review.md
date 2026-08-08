@@ -37,6 +37,15 @@
 | **2026-08-08 re-verify: burn-in MD5 audit** | 🟢 visible | caption strip hash `924a9106...` vs raw `237cfdca...` — DIFFERENT => captions burned |
 | **2026-08-08 re-verify: Shorts/Reels packaging** | 🟢 both packages | post_shorts.json (#shorts injected) + post_reels.json (title-led caption) re-emitted & asserted |
 | **2026-08-08 re-verify: suites** | 🟢 31/31 | verify_agent03 7/7 + verify_agent03_v2 16/16 + pytest 8/8 |
+| **2026-08-08 S2: watermark (TSK-A03-08)** | 🟢 burned | plain vs watermarked bottom-right crop MD5 differ (32b62c96 / 0ebb2906) |
+| **2026-08-08 S2: loudnorm -14 (TSK-A03-09)** | 🟢 -14.0 LUFS | ebur128 integrated I = -14.0 (spec: mobile speakers) |
+| **2026-08-08 S2: thumbnail (TSK-A03-10)** | 🟢 1080x1920 PNG | extract_thumbnail poster frame ffprobe-verified |
+| **2026-08-08 S2: font fallback (TSK-A03-11)** | 🟢 resolves Arial | 352 host fonts scanned, Montserrat absent -> Arial |
+| **2026-08-08 S2: 60fps doubler (TSK-A03-12)** | 🟢 fps=60.00 | minterpolate blend render ffprobe avg_frame_rate=60 |
+| **2026-08-08 S2: color grade (TSK-A03-13)** | 🟢 4 presets | vivid/punch/cinematic/warm; unknown -> ValueError |
+| **2026-08-08 S2: auto-pad (TSK-A03-14)** | 🟢 1080x1920 | scale=decrease + pad filter, no stretching |
+| **2026-08-08 S2: timeout guard (TSK-A03-15)** | 🟢 fires | 1s-limit functional kill; RENDER_TIMEOUT=120 + burn-in guard |
+| **2026-08-08 S2: new suite** | 🟢 18/18 | verify_agent03_v3 real-render coverage of TSK-A03-08..15 |
 
 
 
