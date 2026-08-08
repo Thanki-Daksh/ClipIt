@@ -26,6 +26,22 @@
 
 **Security audit**: nil-0 hardcoded API keys, nil-0 production DB files in tree, placeholder-sentinel enforcement present in `core/config.py`, `.gitignore` now in place.
 
+### 🚀 Sprint 2 Snapshot — TSK-A06-05 → TSK-A06-08 (2026-08-07)
+**Suite expanded to `59 passed, 0 failed`** (`python -m pytest tests/`)
+- **TSK-A06-05 `tests/test_e2e.py`** — full synthetic E2E: enqueue → 8-stage QueueEngine run → REAL FFmpeg 9:16 render → clip row in DB → ffprobe asserts 1080×1920; plus quality probe on the rendered clip.
+- **TSK-A06-06 `tests/media_qa.py` + `tests/test_media_qa.py`** — FFmpeg `signalstats` black-frame detection (YAVG ≤ 16) and `silencedetect` silence detection; proven to flag a black/silent clip and pass a clean testsrc+sine clip.
+- **TSK-A06-07 `tests/secret_sanitizer.py` + `tests/test_security.py`** — reusable recursive scanner for API keys (AIza / gsk_ / sk- / ghp_ / AKIA) + DB files; gates the whole repo clean and proves detection on synthetic leaks (skills live in pytest tmp dirs).
+- **TSK-A06-08 `tests/test_concurrency.py`** — ThreadPoolExecutor stress: 50 concurrent enqueues (unique ids intact), concurrent read sweep, atomic concurrent transitions, `PRAGMA integrity_check = 'ok'` post-burst, round-robin coherence.
+- `pytest.ini` — registered `ffprobe`/`media`/`e2e` marks.
+
+### 🚀 Sprint 3 Snapshot — TSK-A06-09 (2026-08-08)
+**Suite: `149 passed, 1 skipped, 0 failed`** (`python -m pytest`)
+- **TSK-A06-09 `tests/test_live_pipeline.py` (2 tests)** — live video processing: drives the REAL Agent 03 media stack (VideoClipper 9:16 crop, ASSSubtitleGenerator + SubtitleRenderer burn-in, MetadataCompiler) through the real QueueEngine; stubs only the network stages (downloader/transcriber/analyzer). Asserts: job → COMPLETED, real 1080×1920 vertical clip on disk in the account-isolated dir, .ass → burned into final clip (no black frames via signalstats probe), `metadata.json` export package staged in `outputs/` for the auto-poster. Plus a per-account storage-isolation assertion.
+- **TSK-A06-09 `tests/test_subtitle_render.py` (9 tests)** — subtitle rendering integration: ASS dialogue lines + active-word `{\c}` highlight overrides from word timestamps, ASS timestamp format, brace/backslash escaping, preset validation, and a real burn-in that preserves 9:16 + audio stream and isn't a black render; missing-input guards raise.
+- **TSK-A06-09 `tests/test_auto_publisher.py` (10 tests)** — auto-publisher API contract against a stub HTTP adapter (no network, no credentials): YouTube Shorts resumable `videos.insert` init → Location header PUT → video_id; Instagram Reels create-container → status poll (FINISHED) → `media_publish`→media_id; OAuth bearer + uploadType params asserted; title cap 100, IG caption cap 2,200, tag normalization; publish-ready metadata handoff (hashtags normalized `#`-prefixed).
+- **QA housekeeping**: removed `tests/test_debug_tmp.py` (diagnostic scratch duplicating the live suite); gated Agent 02's real-network suite `tests/test_live_ingestion_pipeline.py` behind `CLIPIT_LIVE_NETWORK=1` so the default suite stays deterministic (1 skip, no YouTube/Groq calls).
+- **Secret & DB audit**: `git ls-files` → 0 tracked `.db`/`.env`/`config.json`; `.gitignore` covers `*.db`, `.env`, `storage/*`. No test DB leaks (tests chdir to tmp_path).
+
 
 
 ### 👁️ Multimodal Vision Capability (QA AUDIT)

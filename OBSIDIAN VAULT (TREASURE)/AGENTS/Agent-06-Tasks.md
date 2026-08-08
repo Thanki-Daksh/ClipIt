@@ -13,6 +13,11 @@
 - [x] Build state machine & crash recovery test suite (`tests/test_queue.py`)
 - [x] Build FFmpeg 9:16 crop `ffprobe` verification test (`tests/test_clipper.py`)
 - [x] Build API key security & sanitization scanner
+- [x] TSK-A06-05: Full E2E pipeline test (`tests/test_e2e.py`) — enqueue ➔ real .mp4 render
+- [x] TSK-A06-06: Black-frame & silence probe (`tests/media_qa.py` + `tests/test_media_qa.py`)
+- [x] TSK-A06-07: Codebase secret sanitizer (`tests/secret_sanitizer.py` + `tests/test_security.py`)
+- [x] TSK-A06-08: Queue concurrency stress (`tests/test_concurrency.py`) — 50-thread burst
+- [x] TSK-A06-09: Live video pipeline & auto-poster tests (`tests/test_live_pipeline.py`, `tests/test_subtitle_render.py`, `tests/test_auto_publisher.py`) — real intake→render→publish contract
 
 
 
