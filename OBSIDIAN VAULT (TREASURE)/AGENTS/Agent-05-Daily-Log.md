@@ -25,7 +25,8 @@
 
 
 
-### ⚙️ Recommended Model & Effort Configuration
+## 2026-08-08
+- **Re-verification pass (TSK-A05-09/10)**: re-ran the QA contract suite `tests/test_auto_publisher.py` + `tests/test_publishers.py` → **33/33 PASS** on the shipped modules (no code changes needed; staged as `2e41` already in `main`). CLI smoke: `--verify-config` correctly reports missing secrets (exit 1) with no creds present; `--list` against the live warehouse DB read-only (schema-tolerated: legacy `status` column, no `approved` flag) → 0 approved clips as expected. Synced the vault Assigned-Tasks matrix (all 10 TSK-A05-* now [x] COMPLETED to match repo task file).
 - **Free Context Engine**: deepseek-v4-flash-free (OpenCode Zen - 200k Context Window)
 - **Primary Model**: Opencode Zen (-free) / Gemini 3.6 Flash
 - **Effort Level**: Medium Effort
