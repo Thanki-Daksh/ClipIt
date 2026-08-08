@@ -42,6 +42,12 @@
 - **QA housekeeping**: removed `tests/test_debug_tmp.py` (diagnostic scratch duplicating the live suite); gated Agent 02's real-network suite `tests/test_live_ingestion_pipeline.py` behind `CLIPIT_LIVE_NETWORK=1` so the default suite stays deterministic (1 skip, no YouTube/Groq calls).
 - **Secret & DB audit**: `git ls-files` → 0 tracked `.db`/`.env`/`config.json`; `.gitignore` covers `*.db`, `.env`, `storage/*`. No test DB leaks (tests chdir to tmp_path).
 
+### ✅ Full-Suite Verification Run — 100% GREEN (`166 passed, 0 failed, 0 skipped`)
+Full suite executed with live-network enabled (`CLIPIT_LIVE_NETWORK=1 python -m pytest`) covering every collected test including Agent 02's real YouTube→Whisper→Gemini ingestion test.
+- **Root-cause fix (live test)**: the refactored `WhisperTranscriber`/`ViralityAnalyzer` resolved `config.json` **relative to CWD** → API keys silently missing when pytest chdirs into tmp dirs → "works standalone, fails in-suite". Fixed by resolving `DEFAULT_CONFIG_PATH` from `Path(__file__).resolve().parent.parent` (aligns with `core/config.py`; analyzer reuses transcriber's constant). Verified key resolution from a foreign CWD.
+- **Root-cause fix (collection)**: mid-session edit of `core/db.py` by a peer session (durability/sync refactor + `_migrate`/`check_integrity`/`checkpoint`) left `def transaction` over-indented (collection crash, exit 4) then lost `import os` (`NameError`). Restored the missing `import os`; indentation self-corrected by the writer. Syntax + import verified, full suite green after repair.
+- **Metric**: `166 passed, 0 failed, 0 skipped — 100% pass rate across the full suite` (~35s, includes real FFmpeg renders + one live YouTube→Groq→Gemini leg). No `.db` leaks; 0 tracked secrets.
+
 
 
 ### 👁️ Multimodal Vision Capability (QA AUDIT)

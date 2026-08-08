@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 import uuid
@@ -134,25 +135,51 @@ CREATE INDEX IF NOT EXISTS idx_oauth_provider ON oauth_credentials(provider);
 # Connection wrapper
 # ---------------------------------------------------------------------------
 
+# COMMIT durability levels (PRAGMA synchronous). FULL fsyncs the WAL before
+# COMMIT returns — the only level that guarantees zero data loss across an OS
+# battery kill / power loss. NORMAL is crash-safe but can lose the last
+# commits on power loss. OFF can even corrupt on power loss.
+_SYNC_MODES: dict[str, int] = {"OFF": 0, "NORMAL": 1, "FULL": 2}
+_SYNC_ENV = "CLIPIT_DB_SYNCHRONOUS"
+
+
+def _resolve_sync_mode(override: Optional[str] = None) -> int:
+    """Resolve the synchronous pragma value: explicit arg > env > FULL."""
+    raw = (override or os.environ.get(_SYNC_ENV, "FULL")).strip().upper()
+    if raw in ("0", "1", "2"):
+        return int(raw)
+    if raw in _SYNC_MODES:
+        return _SYNC_MODES[raw]
+    log.warning("invalid %s=%r; falling back to FULL (durable)", _SYNC_ENV, raw)
+    return _SYNC_MODES["FULL"]
+
+
 class Database:
     """Thread-safe SQLite connection manager with atomic transactions."""
 
-    def __init__(self, db_path: str | Path, max_retries: int = 3):
+    def __init__(self, db_path: str | Path, max_retries: int = 3,
+                 synchronous: Optional[str] = None):
         self.db_path = Path(db_path)
         self.max_retries = max_retries
+        # Durability: explicit arg > env > FULL (see _resolve_sync_mode).
+        self._synchronous = _resolve_sync_mode(synchronous)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # One connection per thread (WAL allows concurrent readers + single writer)
         self._local = threading.local()
         self._write_lock = threading.Lock()
-        log.debug("Database initialized at %s", self.db_path)
+        log.debug("Database initialized at %s (synchronous=%s)",
+                  self.db_path, self._synchronous)
 
     # -- connection management ---------------------------------------------
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA synchronous=NORMAL;")
+        journal = conn.execute("PRAGMA journal_mode=WAL;").fetchone()[0]
+        if journal != "wal":
+            log.warning("journal_mode=%s (WAL unavailable on this filesystem); "
+                        "durability degraded", journal)
+        conn.execute(f"PRAGMA synchronous={self._synchronous};")
         conn.execute("PRAGMA foreign_keys=ON;")
         conn.execute("PRAGMA busy_timeout=10000;")
         return conn
@@ -193,15 +220,63 @@ class Database:
                         if "already exists" not in str(exc):
                             log.debug("Schema stmt notice: %s", exc)
             current = conn.execute("PRAGMA user_version;").fetchone()[0]
-            if current < SCHEMA_VERSION:
+            # user_version alone is not trustworthy: legacy dev DBs can claim the
+            # current version while carrying an old clips shape. Detect drift by
+            # inspecting columns so stale tables always get rebuilt.
+            clip_cols = {r[1] for r in conn.execute("PRAGMA table_info(clips);")}
+            if current < SCHEMA_VERSION or "job_id" not in clip_cols:
                 self._migrate(conn, current, SCHEMA_VERSION)
                 conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION};")
-        log.info("schema initialized (user_version=%s)", SCHEMA_VERSION)
+            log.info("schema initialized (user_version=%s)", SCHEMA_VERSION)
 
     @staticmethod
     def _migrate(conn: sqlite3.Connection, from_ver: int, to_ver: int) -> None:
-        # Future migrations append here; base schema creation covers v0 and v1.
-        log.warning("No incremental migration for %s -> %s; schema is idempotent", from_ver, to_ver)
+        """
+        Upgrade legacy databases to the current schema.
+
+        The one wild migration: pre-job_id `clips` tables (old dev-era shape
+        with video_url/source_title/duration/hook_summary/thumbnail_path/
+        subtitles_json). Detection is by column rather than user_version
+        because legacy files can carry an inflated version number.
+
+        All work happens inside the caller's enclosing transaction, so a
+        crash mid-migration rolls the whole upgrade back atomically.
+        """
+        clip_cols = {r[1] for r in conn.execute("PRAGMA table_info(clips);")}
+        if clip_cols and "job_id" not in clip_cols:
+            log.info("migrating legacy clips table -> current schema (v%s)", to_ver)
+            conn.execute("ALTER TABLE clips RENAME TO clips_legacy;")
+
+            # Re-run the current clips DDL (parsed from _SCHEMA_SQL) so the
+            # live definition can never drift from the code.
+            clips_ddl = next(
+                stmt for stmt in _SCHEMA_SQL.split(";")
+                if stmt.strip().startswith("CREATE TABLE IF NOT EXISTS clips ")
+            ) + ";"
+            conn.execute(clips_ddl)
+
+            # Copy every compatible field; render-only legacy columns that have no
+            # modern equivalent (thumbnail/subtitles_json) are dropped and
+            # regenerated by the pipeline.
+            conn.execute(
+                "INSERT INTO clips (id, job_id, account_id, start_time, end_time, "
+                "duration_seconds, virality_score, hook_text, title, video_path, "
+                "caption_path, approved, created_at) "
+                "SELECT id, NULL, account_id, start_time, end_time, duration, "
+                "virality_score, hook_summary, source_title, video_path, NULL, 0, "
+                "created_at FROM clips_legacy"
+            )
+            migrated = conn.execute("SELECT COUNT(*) FROM clips").fetchone()[0]
+            conn.execute("DROP TABLE clips_legacy;")
+
+            # The legacy rename can leave the clips index missing; recreate all
+            # declared indexes (IF NOT EXISTS keeps this idempotent).
+            for stmt in _SCHEMA_SQL.split(";"):
+                if stmt.strip().startswith("CREATE INDEX"):
+                    conn.execute(stmt + ";")
+            log.info("legacy clips migrated: %s row(s) preserved", migrated)
+
+        log.debug("migration %s -> %s complete", from_ver, to_ver)
 
     # ------------------------------------------------------------------
     # Atomic transaction helper
@@ -212,8 +287,19 @@ class Database:
         """
         Atomic context manager. Wraps the body in BEGIN IMMEDIATE ... COMMIT.
         Anything raised rolls back the whole block.
+
+        Guards against nested use: ``_write_lock`` is NOT reentrant, so a
+        second transaction() on the same thread (e.g. ``log_event`` inside a
+        write tx) would otherwise deadlock forever. We raise a clear error
+        before even touching the lock.
         """
         conn = self._conn()
+        if conn.in_transaction:
+            raise RuntimeError(
+                "nested transaction() on the same thread — the write lock is "
+                "not reentrant. Move log_event()/nested writes outside the "
+                "`with self.db.transaction()` block."
+            )
         with self._write_lock:
             conn.execute("BEGIN IMMEDIATE;")
             try:
@@ -222,6 +308,47 @@ class Database:
             except BaseException:
                 conn.execute("ROLLBACK;")
                 raise
+
+    # ------------------------------------------------------------------
+    # Integrity + durability helpers
+    # ------------------------------------------------------------------
+
+    def check_integrity(self, quick: bool = True) -> dict:
+        """
+        PRAGMA integrity/quick_check plus a referential-integrity scan for
+        orphaned clips (rows whose job/account no longer exists). Returns a
+        dict; ``quick_check == "ok"`` and zero orphan counts mean healthy.
+        """
+        conn = self._conn()
+        pragma = "quick_check" if quick else "integrity_check"
+        result = conn.execute(f"PRAGMA {pragma};").fetchone()[0]
+        orphans_no_job = conn.execute(
+            "SELECT COUNT(*) FROM clips c LEFT JOIN jobs j ON j.id = c.job_id "
+            "WHERE j.id IS NULL"
+        ).fetchone()[0]
+        orphans_no_account = conn.execute(
+            "SELECT COUNT(*) FROM clips c LEFT JOIN accounts a ON a.id = c.account_id "
+            "WHERE a.id IS NULL"
+        ).fetchone()[0]
+        return {
+            "check": pragma,
+            "quick_check": result,
+            "orphan_clips_no_job": orphans_no_job,
+            "orphan_clips_no_account": orphans_no_account,
+        }
+
+    def checkpoint(self, mode: str = "TRUNCATE") -> None:
+        """
+        Run ``PRAGMA wal_checkpoint(<mode>)`` on this thread's connection so
+        the WAL is folded back into the main DB file. Call on graceful daemon
+        shutdown to keep sidecars small after a long run.
+        """
+        conn = self._conn()
+        busy, log_frames, checkpointed = conn.execute(
+            f"PRAGMA wal_checkpoint({mode});"
+        ).fetchone()
+        log.info("wal checkpoint %s: busy=%s log=%s frames=%s",
+                 mode, busy, log_frames, checkpointed)
 
     # ------------------------------------------------------------------
     # Audit log
